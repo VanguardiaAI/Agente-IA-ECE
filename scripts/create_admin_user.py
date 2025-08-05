@@ -14,20 +14,26 @@ async def main():
     try:
         auth = AdminAuthService()
         
-        # Verificar si el usuario ya existe
+        # Inicializar el servicio
+        await auth.initialize()
+        
+        # Datos del usuario
         username = "admin"
         password = "EvaAdmin2025!ElCorte"
         email = "admin@elcorteelectrico.com"
         
-        # Intentar verificar si ya existe
-        exists = await auth.verify_admin(username, password)
-        if exists:
+        # Intentar autenticar primero para ver si ya existe
+        print(f"🔍 Verificando si el usuario '{username}' ya existe...")
+        login_result = await auth.authenticate_admin(username, password)
+        
+        if login_result:
             print(f"✅ El usuario '{username}' ya existe y la contraseña es correcta")
+            print(f"🌐 Puedes acceder a: http://ia.elcorteelectrico.com:8080/admin/login")
             return
         
-        # Crear el usuario
+        # Crear el usuario (nota: el orden es username, email, password)
         print(f"🔨 Creando usuario administrador '{username}'...")
-        result = await auth.create_admin(username, password, email)
+        result = await auth.create_admin(username, email, password)
         
         if result:
             print(f"✅ Usuario administrador creado exitosamente")
@@ -37,6 +43,10 @@ async def main():
             print(f"\n🌐 Ahora puedes acceder a: http://ia.elcorteelectrico.com:8080/admin/login")
         else:
             print("❌ Error al crear el usuario (puede que ya exista)")
+            print("Intentando hacer login de todas formas...")
+            login_test = await auth.authenticate_admin(username, password)
+            if login_test:
+                print("✅ El usuario existe y puedes hacer login")
             
     except Exception as e:
         print(f"❌ Error: {e}")
