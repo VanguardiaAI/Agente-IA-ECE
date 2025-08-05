@@ -48,11 +48,12 @@ services:
       - ./logs:/app/logs
     networks:
       - eva_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # MCP server doesn't have HTTP health endpoint
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
 
   # Aplicación Web (FastAPI)
   web-app:
@@ -108,7 +109,7 @@ services:
     networks:
       - eva_network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/nginx-health"]
       interval: 30s
       timeout: 10s
       retries: 3
