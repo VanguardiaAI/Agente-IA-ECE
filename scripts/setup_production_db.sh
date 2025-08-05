@@ -12,8 +12,10 @@ echo "⏳ Waiting for PostgreSQL to be ready..."
 sleep 5
 
 # Initialize database
-echo "📦 Creating database and user..."
-docker exec -i eva-postgres-prod psql -U postgres < scripts/init_database.sql
+echo "📦 Setting up database..."
+# The pgvector image creates the user and database from environment variables
+# We just need to create the extension
+docker exec eva-postgres-prod psql -U "${POSTGRES_USER:-eva_user}" -d "${POSTGRES_DB:-eva_db}" -c "CREATE EXTENSION IF NOT EXISTS vector;" || echo "Extension might already exist"
 
 # Create tables
 echo "📊 Creating tables..."
