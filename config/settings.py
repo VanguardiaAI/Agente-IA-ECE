@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     # Configuración de PostgreSQL (reemplaza MongoDB)
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
-    POSTGRES_DB: str = "knowledge_base"
-    POSTGRES_USER: str
+    POSTGRES_DB: str = "eva_db"
+    POSTGRES_USER: str = "eva_user"
     POSTGRES_PASSWORD: str
     DATABASE_URL: Optional[str] = None
     
