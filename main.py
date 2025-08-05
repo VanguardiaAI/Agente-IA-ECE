@@ -18,6 +18,13 @@ mcp = FastMCP("Customer Service Assistant")
 register_product_tools(mcp)
 register_order_tools(mcp)
 
+# Add health endpoint for monitoring
+@mcp.get("/health")
+async def health():
+    """Health check endpoint for monitoring"""
+    return {"status": "healthy", "service": "mcp-server"}
+
+
 @mcp.tool()
 async def test_connection() -> str:
     """Prueba la conexión con WooCommerce"""
