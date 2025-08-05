@@ -9,10 +9,20 @@ echo "🔧 Complete PostgreSQL reset for production..."
 echo "⏹️  Stopping all containers..."
 docker-compose -f docker-compose.production.yml down -v --remove-orphans
 
+# Stop any remaining PostgreSQL containers
+docker stop eva-postgres-prod 2>/dev/null || true
+docker rm eva-postgres-prod 2>/dev/null || true
+
 # Clean up any remaining volumes
 echo "🗑️  Cleaning up volumes..."
 docker volume rm agente-ia-ece_postgres_data 2>/dev/null || true
 docker volume rm $(docker volume ls -q | grep eva) 2>/dev/null || true
+docker volume rm $(docker volume ls -q | grep postgres) 2>/dev/null || true
+docker volume rm $(docker volume ls -q | grep agente-ia-ece) 2>/dev/null || true
+
+# Clean up the local directory bind mount if it exists
+echo "🗑️  Cleaning local data directory..."
+rm -rf ./docker/postgres/data/* 2>/dev/null || true
 
 # Start only PostgreSQL with correct environment
 echo "🚀 Starting PostgreSQL with correct settings..."
