@@ -1,0 +1,695 @@
+/**
+ * Eva Chatbot Widget Styles
+ * Version: 1.0.0
+ */
+
+:root {
+    --eva-primary-color: #54841e;
+    --eva-secondary-color: #74b72a;
+    --eva-text-color: #ffffff;
+    --eva-bg-color: #ffffff;
+    --eva-bg-secondary: #f1f1f1;
+    --eva-border-color: #e0e0e0;
+    --eva-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+    --eva-transition: all 0.3s ease;
+}
+
+/* Widget Container */
+.eva-chatbot-widget {
+    position: fixed;
+    z-index: 999999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.eva-chatbot-widget * {
+    box-sizing: border-box;
+}
+
+/* Position Classes */
+.eva-position-bottom-right {
+    bottom: 20px;
+    right: 20px;
+}
+
+.eva-position-bottom-left {
+    bottom: 20px;
+    left: 20px;
+}
+
+/* Chat Button */
+.eva-chat-button {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: var(--eva-primary-color) !important;
+    color: var(--eva-text-color) !important;
+    border: none;
+    cursor: pointer;
+    box-shadow: var(--eva-shadow);
+    transition: var(--eva-transition);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.eva-chat-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.eva-chat-button:active {
+    transform: scale(0.95);
+}
+
+/* Button Sizes */
+.eva-size-small {
+    width: 50px;
+    height: 50px;
+}
+
+.eva-size-medium {
+    width: 60px;
+    height: 60px;
+}
+
+.eva-size-large {
+    width: 70px;
+    height: 70px;
+}
+
+.eva-chat-icon {
+    width: 28px;
+    height: 28px;
+    transition: transform 0.3s ease;
+}
+
+.eva-chat-button:hover .eva-chat-icon {
+    transform: rotate(15deg);
+}
+
+/* Unread Indicator */
+.eva-unread-indicator {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: #ff4444;
+    color: white;
+    border-radius: 10px;
+    padding: 2px 6px;
+    font-size: 12px;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(255, 68, 68, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 68, 68, 0);
+    }
+}
+
+/* Chat Window */
+.eva-chat-window {
+    position: absolute;
+    bottom: 20px;
+    right: 0;
+    width: 380px;
+    height: 650px;
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.3s ease;
+}
+
+.eva-position-bottom-left .eva-chat-window {
+    right: auto;
+    left: 0;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Chat Header */
+.eva-chat-header {
+    background: linear-gradient(135deg, 
+        rgba(84, 132, 30, 0.95) 0%, 
+        rgba(116, 183, 42, 0.9) 100%
+    );
+    backdrop-filter: blur(10px);
+    color: var(--eva-text-color) !important;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.eva-header-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.eva-avatar {
+    width: 40px;
+    height: 40px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.eva-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.eva-header-text h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.eva-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+.eva-status-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #4caf50;
+    border-radius: 50%;
+    animation: blink 2s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.eva-header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.eva-header-actions button {
+    background: none;
+    border: none;
+    color: var(--eva-text-color);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.eva-header-actions button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Messages Container */
+.eva-messages-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    scroll-behavior: smooth;
+    background: linear-gradient(to bottom, 
+        rgba(255, 255, 255, 0.3) 0%,
+        rgba(255, 255, 255, 0.1) 100%
+    );
+    min-height: 0;
+}
+
+.eva-messages-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.eva-messages-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+}
+
+.eva-messages-container::-webkit-scrollbar-thumb {
+    background: rgba(84, 132, 30, 0.5);
+    border-radius: 3px;
+}
+
+.eva-messages-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(84, 132, 30, 0.8);
+}
+
+/* Messages */
+.eva-message {
+    margin-bottom: 16px;
+    animation: messageSlide 0.3s ease;
+}
+
+@keyframes messageSlide {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.eva-bot-message {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.eva-user-message {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.eva-message-content {
+    max-width: 70%;
+    padding: 12px 16px;
+    border-radius: 18px;
+    word-wrap: break-word;
+    line-height: 1.4;
+}
+
+.eva-bot-message .eva-message-content {
+    background-color: rgba(241, 241, 241, 0.9);
+    color: #333;
+    border-bottom-left-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.eva-user-message .eva-message-content {
+    background-color: var(--eva-primary-color) !important;
+    color: var(--eva-text-color) !important;
+    border-bottom-right-radius: 4px;
+}
+
+/* Connection Status */
+.eva-connection-status {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    border-top: 1px solid #ffeaa7;
+}
+
+/* Input Area */
+.eva-input-area {
+    padding: 16px;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    background-color: rgba(250, 250, 250, 0.8);
+    backdrop-filter: blur(10px);
+}
+
+.eva-chat-form {
+    margin: 0;
+}
+
+.eva-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(84, 132, 30, 0.2);
+    border-radius: 24px;
+    padding: 4px 4px 4px 16px;
+    transition: all 0.2s;
+    backdrop-filter: blur(5px);
+}
+
+.eva-input-wrapper:focus-within {
+    border-color: var(--eva-primary-color);
+    box-shadow: 0 0 0 3px rgba(84, 132, 30, 0.1);
+}
+
+.eva-message-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 14px;
+    resize: none;
+    max-height: 100px;
+    line-height: 1.4;
+    padding: 0;
+    background: transparent;
+}
+
+.eva-send-btn {
+    background-color: transparent !important;
+    color: #74b72a !important;
+    border: none !important;
+    border-radius: 50% !important;
+    width: 28px !important;
+    height: 28px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: var(--eva-transition) !important;
+    flex-shrink: 0 !important;
+    padding: 0 !important;
+    margin: 2px !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.eva-send-btn:hover {
+    background-color: rgba(116, 183, 42, 0.1) !important;
+    color: #54841e !important;
+    transform: scale(1.1) !important;
+}
+
+.eva-send-btn:active {
+    transform: scale(0.95) !important;
+    background-color: rgba(116, 183, 42, 0.2) !important;
+}
+
+.eva-send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.eva-send-btn svg {
+    width: 16px !important;
+    height: 16px !important;
+    display: block !important;
+    color: inherit !important;
+}
+
+/* Force button styles to override any theme styles */
+.eva-chatbot-widget .eva-send-btn,
+.eva-chatbot-widget button.eva-send-btn,
+#eva-chatbot-widget .eva-send-btn {
+    background-color: transparent !important;
+    color: #74b72a !important;
+    border: none !important;
+}
+
+/* Typing Indicator */
+.eva-typing-indicator {
+    padding: 8px 16px;
+    font-size: 14px;
+    color: #666;
+    font-style: italic;
+}
+
+.eva-typing-message {
+    display: inline-block;
+    background: linear-gradient(90deg, 
+        #333 0%, 
+        #666 20%, 
+        #999 40%, 
+        #ccc 50%, 
+        #999 60%, 
+        #666 80%, 
+        #333 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 3s linear infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% center;
+    }
+    100% {
+        background-position: -200% center;
+    }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 480px) {
+    .eva-chatbot-widget {
+        bottom: 0 !important;
+        right: 0 !important;
+        left: 0 !important;
+    }
+    
+    .eva-chat-button {
+        bottom: 20px;
+        right: 20px;
+        position: fixed;
+    }
+    
+    .eva-chat-window {
+        width: 100%;
+        height: 100%;
+        bottom: 0;
+        border-radius: 0;
+        position: fixed;
+    }
+    
+    .eva-position-bottom-left .eva-chat-button {
+        left: 20px;
+        right: auto;
+    }
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(20px)) {
+    .eva-chat-window {
+        background-color: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    .eva-chat-window {
+        background-color: rgba(26, 26, 26, 0.85);
+        color: #ffffff;
+    }
+    
+    .eva-bot-message .eva-message-content {
+        background-color: #2a2a2a;
+        color: #ffffff;
+    }
+    
+    .eva-input-area {
+        background-color: #1a1a1a;
+        border-top-color: #333;
+    }
+    
+    .eva-input-wrapper {
+        background-color: #2a2a2a;
+        border-color: #333;
+    }
+    
+    .eva-message-input {
+        color: #ffffff;
+    }
+}
+
+/* Loading Animation */
+.eva-loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top-color: var(--eva-primary-color);
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Custom Scrollbar for Firefox */
+.eva-messages-container {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(84, 132, 30, 0.5) rgba(0, 0, 0, 0.1);
+}
+
+/* Quick Replies */
+.eva-quick-replies {
+    padding: 12px 16px;
+    border-top: 1px solid rgba(84, 132, 30, 0.2);
+    background-color: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.eva-quick-reply-btn {
+    padding: 8px 16px;
+    border: 1px solid rgba(84, 132, 30, 0.3);
+    background-color: transparent;
+    color: var(--eva-primary-color);
+    border-radius: 20px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: var(--eva-transition);
+    font-weight: 500;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+
+.eva-quick-reply-btn:hover {
+    background-color: rgba(84, 132, 30, 0.1);
+    border-color: var(--eva-primary-color);
+    color: var(--eva-primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(84, 132, 30, 0.2);
+}
+
+.eva-quick-reply-btn:active {
+    transform: translateY(0);
+    background-color: rgba(84, 132, 30, 0.2);
+}
+
+/* Status indicator color update */
+.eva-status-dot {
+    background-color: var(--eva-secondary-color);
+}
+
+/* WordPress Product Cards */
+.eva-product-card {
+    margin-bottom: 10px;
+    transition: box-shadow 0.2s;
+    background: #ffffff !important;
+}
+
+.eva-product-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+}
+
+.eva-product-card img {
+    transition: transform 0.2s;
+}
+
+.eva-product-card:hover img {
+    transform: scale(1.08);
+}
+
+.eva-product-card .eva-product-link {
+    transition: all 0.2s;
+    text-decoration: none !important;
+}
+
+.eva-product-card .eva-product-link:hover {
+    background: #74b72a !important;
+    box-shadow: 0 1px 4px rgba(116, 183, 42, 0.3);
+}
+
+/* Product list scrollbar */
+.eva-products-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.eva-products-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+}
+
+.eva-products-list::-webkit-scrollbar-thumb {
+    background: rgba(84, 132, 30, 0.3);
+    border-radius: 3px;
+}
+
+.eva-products-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(84, 132, 30, 0.5);
+}
+
+/* WordPress Link Preview */
+.eva-link-preview {
+    transition: all 0.2s;
+}
+
+.eva-link-preview:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Message content styles for HTML */
+.eva-message-content {
+    line-height: 1.5;
+}
+
+.eva-message-content p {
+    margin: 0 0 8px 0;
+    line-height: 1.5;
+    color: inherit;
+}
+
+.eva-message-content p:last-child {
+    margin-bottom: 0;
+}
+
+.eva-message-content strong {
+    font-weight: normal;
+    color: inherit;
+}
+
+.eva-message-content em {
+    font-style: normal;
+    color: inherit;
+}
+
+.eva-message-content .eva-products-list {
+    margin: 10px 0;
+}
+
+/* Bot message specific styles for better HTML rendering */
+.eva-bot-message .eva-message-content {
+    max-width: 100%;
+}
+
+.eva-bot-message .eva-message-content > div {
+    max-width: 100%;
+}
+
+/* Ensure product cards have black text */
+.eva-bot-message .eva-product-card h3,
+.eva-bot-message .eva-product-card p {
+    color: #000000 !important;
+}
+
+/* Style only the product link buttons */
+.eva-bot-message .eva-product-link {
+    color: white !important;
+    text-decoration: none !important;
+}
+
+.eva-bot-message .eva-product-link:hover {
+    text-decoration: none !important;
+}

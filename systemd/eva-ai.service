@@ -1,0 +1,47 @@
+[Unit]
+Description=Eva AI Customer Service Assistant
+Documentation=https://github.com/vanguardia/eva-ai
+After=docker.service
+Requires=docker.service
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=forking
+RemainAfterExit=yes
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+# Usuario y grupo
+User=eva
+Group=docker
+
+# Directorio de trabajo
+WorkingDirectory=/opt/eva-ai
+
+# Variables de entorno
+Environment=COMPOSE_PROJECT_NAME=eva-ai
+Environment=COMPOSE_FILE=docker-compose.production.yml
+
+# Comandos de inicio y parada
+ExecStartPre=/usr/bin/docker-compose -f ${COMPOSE_FILE} down --remove-orphans
+ExecStart=/usr/bin/docker-compose -f ${COMPOSE_FILE} up -d
+ExecStop=/usr/bin/docker-compose -f ${COMPOSE_FILE} down
+ExecReload=/usr/bin/docker-compose -f ${COMPOSE_FILE} restart
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=eva-ai
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/eva-ai
+
+[Install]
+WantedBy=multi-user.target

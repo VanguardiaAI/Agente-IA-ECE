@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guía de Usuario - Eva AI Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #000000;
+            --secondary-color: #ffffff;
+            --accent-color: #54841e;
+            --gray-100: #f8f9fa;
+            --gray-200: #e9ecef;
+            --gray-300: #dee2e6;
+            --gray-400: #ced4da;
+            --gray-500: #adb5bd;
+            --gray-600: #6c757d;
+            --gray-700: #495057;
+            --gray-800: #343a40;
+            --gray-900: #212529;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--gray-100) 0%, var(--secondary-color) 100%);
+            color: var(--gray-900);
+            line-height: 1.6;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: var(--primary-color);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .navbar-brand {
+            color: var(--secondary-color) !important;
+            font-weight: 600;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar-nav {
+            position: fixed;
+            top: 80px;
+            left: 0;
+            width: 280px;
+            height: calc(100vh - 80px);
+            background: var(--secondary-color);
+            border-right: 1px solid var(--gray-200);
+            overflow-y: auto;
+            padding: 2rem 1rem;
+        }
+
+        .nav-section {
+            margin-bottom: 2rem;
+        }
+
+        .nav-section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--gray-500);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            color: var(--gray-700);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            text-decoration: none;
+            display: block;
+            transition: all 0.3s ease;
+            margin-bottom: 0.25rem;
+        }
+
+        .nav-link:hover {
+            background: var(--gray-100);
+            color: var(--primary-color);
+            transform: translateX(5px);
+        }
+
+        .nav-link.active {
+            background: var(--accent-color);
+            color: var(--secondary-color);
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            margin-top: 60px;
+            padding: 3rem;
+            max-width: 1200px;
+        }
+
+        /* Content Sections */
+        .guide-section {
+            background: var(--secondary-color);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            scroll-margin-top: 100px;
+        }
+
+        .guide-section h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--gray-200);
+            font-weight: 600;
+        }
+
+        .guide-section h3 {
+            color: var(--gray-800);
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .guide-section h4 {
+            color: var(--gray-700);
+            margin-top: 1.25rem;
+            margin-bottom: 0.75rem;
+            font-weight: 500;
+        }
+
+        /* Feature Cards */
+        .feature-card {
+            background: var(--gray-100);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .feature-card h5 {
+            color: var(--gray-800);
+            margin-bottom: 0.5rem;
+        }
+
+        /* Alert Boxes */
+        .tip-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+
+        .success-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+
+        /* Code Blocks */
+        .code-block {
+            background: var(--gray-900);
+            color: #f8f8f2;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
+        }
+
+        /* Lists */
+        .feature-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .feature-list li {
+            padding: 0.5rem 0;
+            padding-left: 2rem;
+            position: relative;
+        }
+
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        /* Tables */
+        .guide-table {
+            width: 100%;
+            margin: 1rem 0;
+            border-collapse: collapse;
+        }
+
+        .guide-table th {
+            background: var(--gray-100);
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 2px solid var(--gray-300);
+        }
+
+        .guide-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        /* Back to top button */
+        #backToTop {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--accent-color);
+            color: var(--secondary-color);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            z-index: 999;
+        }
+
+        #backToTop:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar-nav {
+                display: none;
+            }
+            
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            .navbar, .sidebar-nav, #backToTop {
+                display: none !important;
+            }
+            
+            .main-content {
+                margin: 0;
+                padding: 0;
+            }
+            
+            .guide-section {
+                box-shadow: none;
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand">
+                <i class="bi bi-book"></i>
+                Guía de Usuario - Eva AI Assistant
+            </span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-light btn-sm" onclick="window.print()">
+                    <i class="bi bi-printer"></i> Imprimir
+                </button>
+                <a href="/admin" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-arrow-left"></i> Volver al Panel
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar Navigation -->
+    <div class="sidebar-nav">
+        <div class="nav-section">
+            <div class="nav-section-title">Inicio</div>
+            <a href="#intro" class="nav-link">¿Qué es Eva?</a>
+            <a href="#quick-start" class="nav-link">Inicio Rápido</a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Panel de Control</div>
+            <a href="#dashboard" class="nav-link">Dashboard</a>
+            <a href="#metrics" class="nav-link">Métricas</a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Configuración</div>
+            <a href="#bot-config" class="nav-link">Personalidad del Bot</a>
+            <a href="#business-hours" class="nav-link">Horario de Atención</a>
+            <a href="#behavior" class="nav-link">Comportamiento</a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Gestión</div>
+            <a href="#knowledge-base" class="nav-link">Base de Conocimiento</a>
+            <a href="#conversations" class="nav-link">Conversaciones</a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Integraciones</div>
+            <a href="#woocommerce" class="nav-link">WooCommerce</a>
+            <a href="#whatsapp" class="nav-link">WhatsApp Business</a>
+            <a href="#wordpress" class="nav-link">Widget WordPress</a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Información</div>
+            <a href="#reports" class="nav-link">Métricas</a>
+            <a href="#best-practices" class="nav-link">Mejores Prácticas</a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Introduction Section -->
+        <section id="intro" class="guide-section">
+            <h2>📚 ¿Qué es Eva?</h2>
+            <p class="lead">Eva es tu asistente virtual inteligente que ayuda a tus clientes las 24 horas del día, los 7 días de la semana.</p>
+            
+            <div class="feature-card">
+                <h5>Características Principales</h5>
+                <ul class="feature-list">
+                    <li>Responde preguntas sobre productos automáticamente</li>
+                    <li>Ayuda con consultas de pedidos y envíos</li>
+                    <li>Ofrece soporte al cliente en múltiples idiomas</li>
+                    <li>Se integra con WooCommerce y WhatsApp Business</li>
+                    <li>Aprende de tu base de conocimiento</li>
+                </ul>
+            </div>
+
+            <div class="tip-box">
+                <strong>💡 Tip:</strong> Eva aprende continuamente de las interacciones con tus clientes, mejorando sus respuestas con el tiempo.
+            </div>
+        </section>
+
+        <!-- Quick Start Section -->
+        <section id="quick-start" class="guide-section">
+            <h2>🚀 Inicio Rápido</h2>
+            
+            <h3>Acceso al Panel</h3>
+            <ol>
+                <li>Abre tu navegador web</li>
+                <li>Ingresa a: <code>http://tu-dominio.com:8080/admin</code></li>
+                <li>Inicia sesión con tus credenciales</li>
+                <li>¡Ya estás listo para configurar a Eva!</li>
+            </ol>
+
+            <h3>Primeros Pasos Esenciales</h3>
+            <div class="feature-card">
+                <ul class="feature-list">
+                    <li>Verifica el estado del sistema en el Dashboard</li>
+                    <li>Configura el mensaje de bienvenida en Configuración</li>
+                    <li>Agrega información de tu empresa en Base de Conocimiento</li>
+                    <li>Prueba el chat desde tu sitio web</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Dashboard Section -->
+        <section id="dashboard" class="guide-section">
+            <h2>📊 Panel de Control (Dashboard)</h2>
+            
+            <h3>Vista General</h3>
+            <p>El dashboard te muestra información básica sobre el uso del sistema:</p>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>💬 Conversaciones Hoy</h5>
+                        <p>Total de conversaciones en las últimas 24 horas</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>👥 Usuarios Únicos</h5>
+                        <p>Clientes diferentes que han usado Eva hoy</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>📚 Base de Conocimiento</h5>
+                        <p>Total de documentos disponibles para Eva</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>📱 Plataformas</h5>
+                        <p>Distribución entre WordPress y WhatsApp</p>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Estado del Sistema</h3>
+            <p>El indicador de estado muestra si Eva está:</p>
+            <ul class="feature-list">
+                <li><strong>Activo:</strong> Sistema funcionando correctamente</li>
+                <li><strong>Verificando:</strong> Comprobando conexiones</li>
+                <li><strong>Inactivo:</strong> Requiere atención</li>
+            </ul>
+        </section>
+
+        <!-- Bot Configuration Section -->
+        <section id="bot-config" class="guide-section">
+            <h2>⚙️ Personalidad del Bot</h2>
+            
+            <h3>Configuración General</h3>
+            <div class="feature-card">
+                <h5>Personaliza cómo se presenta Eva:</h5>
+                <ul>
+                    <li><strong>Nombre del Bot:</strong> Cómo se presenta (por defecto: Eva)</li>
+                    <li><strong>Mensaje de Bienvenida:</strong> Primera impresión para tus clientes</li>
+                    <li><strong>Idioma Principal:</strong> Español, Inglés o Catalán</li>
+                </ul>
+            </div>
+
+            <h3>Estilos de Respuesta</h3>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <h5>👔 Profesional</h5>
+                        <p>Formal y corporativo</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <h5>😊 Casual</h5>
+                        <p>Relajado pero respetuoso</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <h5>🤗 Amigable</h5>
+                        <p>Cálido y cercano</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <strong>⚠️ Importante:</strong> Los cambios en la personalidad del bot se aplican inmediatamente a todas las conversaciones nuevas.
+            </div>
+        </section>
+
+        <!-- Business Hours Section -->
+        <section id="business-hours" class="guide-section">
+            <h2>🕐 Horario de Atención</h2>
+            
+            <h3>Configuración de Horario</h3>
+            <p>Define cuándo tu equipo está disponible para atención personalizada:</p>
+            
+            <div class="feature-card">
+                <ul>
+                    <li><strong>Días Laborables:</strong> Selecciona qué días trabajas</li>
+                    <li><strong>Hora de Apertura:</strong> Cuándo empieza la atención</li>
+                    <li><strong>Hora de Cierre:</strong> Cuándo termina la atención</li>
+                    <li><strong>Zona Horaria:</strong> Tu ubicación</li>
+                </ul>
+            </div>
+
+            <h3>Mensajes Especiales</h3>
+            <div class="tip-box">
+                <strong>💡 Tip:</strong> Configura mensajes personalizados para:
+                <ul>
+                    <li>Fuera de horario</li>
+                    <li>Días festivos</li>
+                    <li>Períodos de vacaciones</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Knowledge Base Section -->
+        <section id="knowledge-base" class="guide-section">
+            <h2>📚 Base de Conocimiento</h2>
+            
+            <h3>¿Qué es la Base de Conocimiento?</h3>
+            <p>Es la información que Eva usa para responder preguntas. Aquí guardas políticas, preguntas frecuentes, y cualquier dato importante de tu negocio.</p>
+            
+            <h3>Categorías de Documentos</h3>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <h5>📋 Políticas</h5>
+                        <ul>
+                            <li>Devoluciones</li>
+                            <li>Garantías</li>
+                            <li>Envíos</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <h5>❓ Preguntas Frecuentes</h5>
+                        <ul>
+                            <li>Cómo comprar</li>
+                            <li>Métodos de pago</li>
+                            <li>Seguimiento</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <h5>ℹ️ Información General</h5>
+                        <ul>
+                            <li>Sobre nosotros</li>
+                            <li>Ubicación</li>
+                            <li>Servicios</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Cómo Agregar Información</h3>
+            <ol>
+                <li>Ve a "Base de Conocimiento" en el menú</li>
+                <li>Haz clic en "Nuevo Documento"</li>
+                <li>Escribe el título (ej: "Política de Devoluciones")</li>
+                <li>Selecciona la categoría apropiada</li>
+                <li>Escribe el contenido en formato simple</li>
+                <li>Guarda y Eva lo aprenderá automáticamente</li>
+            </ol>
+
+            <div class="code-block">
+# Formato de Documento
+
+## Título de Sección
+
+Información clara y directa.
+
+### Subsección
+
+- Punto 1
+- Punto 2
+- Punto 3
+
+**Importante**: Texto resaltado
+            </div>
+        </section>
+
+        <!-- Conversations Section -->
+        <section id="conversations" class="guide-section">
+            <h2>💬 Información de Conversaciones</h2>
+            
+            <h3>Datos Disponibles</h3>
+            <p>El sistema registra información básica sobre las conversaciones:</p>
+            
+            <div class="feature-card">
+                <h5>Información Registrada</h5>
+                <ul>
+                    <li><strong>ID de Usuario:</strong> Identificador único del cliente</li>
+                    <li><strong>Plataforma:</strong> WordPress o WhatsApp</li>
+                    <li><strong>Fecha y Hora:</strong> Cuándo ocurrió la conversación</li>
+                    <li><strong>Cantidad de Mensajes:</strong> Total de intercambios</li>
+                </ul>
+            </div>
+
+            <h3>Configuración de Escalamiento</h3>
+            <p>Puedes configurar palabras clave que activen una respuesta especial cuando los clientes necesiten atención humana:</p>
+            
+            <div class="tip-box">
+                <strong>💡 Palabras de Escalamiento:</strong>
+                <p>En la configuración puedes definir palabras como "hablar con persona", "agente humano", "queja" que harán que Eva ofrezca contactar con tu equipo.</p>
+            </div>
+
+            <div class="warning-box">
+                <strong>⚠️ Nota Importante:</strong> El sistema no incluye un monitor de conversaciones en tiempo real. La información se registra para estadísticas básicas únicamente.
+            </div>
+        </section>
+
+        <!-- WooCommerce Section -->
+        <section id="woocommerce" class="guide-section">
+            <h2>🛍️ Integración WooCommerce</h2>
+            
+            <h3>Sincronización de Productos</h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>🔄 Automática</h5>
+                        <ul>
+                            <li>Cada 6 horas</li>
+                            <li>Actualizaciones en tiempo real</li>
+                            <li>Detecta cambios automáticamente</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>🔧 Manual</h5>
+                        <ol>
+                            <li>Ve a "Configuración"</li>
+                            <li>Sección "WooCommerce"</li>
+                            <li>Click en "Sincronizar Ahora"</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Información de Productos</h3>
+            <p>Eva conoce de cada producto:</p>
+            <table class="guide-table">
+                <tr>
+                    <td>✓ Nombre y descripción</td>
+                    <td>✓ Precio (con IVA)</td>
+                </tr>
+                <tr>
+                    <td>✓ Disponibilidad</td>
+                    <td>✓ Categorías</td>
+                </tr>
+                <tr>
+                    <td>✓ Imágenes</td>
+                    <td>✓ Variaciones</td>
+                </tr>
+                <tr>
+                    <td>✓ Especificaciones técnicas</td>
+                    <td>✓ Stock disponible</td>
+                </tr>
+            </table>
+
+            <h3>Gestión de Pedidos</h3>
+            <div class="success-box">
+                <strong>✅ Consultas Seguras:</strong> Para ver información de pedidos, Eva solicita:
+                <ol>
+                    <li>Número de pedido</li>
+                    <li>Email del cliente</li>
+                    <li>Validación de ambos</li>
+                </ol>
+            </div>
+        </section>
+
+        <!-- WhatsApp Section -->
+        <section id="whatsapp" class="guide-section">
+            <h2>📱 WhatsApp Business</h2>
+            
+            <h3>Configuración Inicial</h3>
+            <div class="feature-card">
+                <h5>Requisitos</h5>
+                <ul>
+                    <li>Cuenta Business de WhatsApp</li>
+                    <li>Número verificado</li>
+                    <li>API de 360Dialog configurada</li>
+                </ul>
+            </div>
+
+            <h3>Tipos de Mensajes</h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>📨 Respuestas Automáticas</h5>
+                        <ul>
+                            <li>Mensaje de bienvenida</li>
+                            <li>Horario de atención</li>
+                            <li>Confirmación de recepción</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>📋 Plantillas Aprobadas</h5>
+                        <ul>
+                            <li>Recuperación de carrito abandonado</li>
+                            <li>Mensajes promocionales (si están configurados)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Recuperación de Carritos Abandonados</h3>
+            <p>Sistema automático para recuperar ventas perdidas:</p>
+            
+            <div class="feature-card">
+                <h5>⚙️ Configuración</h5>
+                <ul>
+                    <li><strong>Tiempo de Espera:</strong> 20 minutos por defecto</li>
+                    <li><strong>Mensaje:</strong> Un solo mensaje personalizado con productos</li>
+                    <li><strong>Descuento:</strong> Código "EXPRESS" (fijo)</li>
+                    <li><strong>Frecuencia:</strong> Un mensaje por carrito abandonado</li>
+                </ul>
+            </div>
+
+            <div class="tip-box">
+                <strong>💡 Proceso Automático:</strong>
+                <ol>
+                    <li>Cliente abandona carrito</li>
+                    <li>Eva espera el tiempo configurado (20 min por defecto)</li>
+                    <li>Envía UN mensaje por WhatsApp con código EXPRESS</li>
+                    <li>Incluye lista de productos y enlace al carrito</li>
+                    <li>No se envían mensajes adicionales</li>
+                </ol>
+            </div>
+
+            <div class="feature-card">
+                <h5>🔧 Configuración en WooCommerce</h5>
+                <p>En "WooCommerce Cart Abandonment Recovery" puedes ajustar:</p>
+                <ul>
+                    <li><strong>Tiempo de corte:</strong> Cuándo considerar un carrito como abandonado</li>
+                    <li><strong>URL del webhook:</strong> Para conectar con Eva</li>
+                    <li><strong>Otras opciones:</strong> Configuraciones adicionales disponibles</li>
+                </ul>
+                <p><strong>Nota:</strong> El código de descuento "EXPRESS" es fijo y no se puede modificar.</p>
+            </div>
+        </section>
+
+        <!-- WordPress Widget Section -->
+        <section id="wordpress" class="guide-section">
+            <h2>🌐 Widget de WordPress</h2>
+            
+            <h3>Instalación</h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>📦 En WordPress</h5>
+                        <ol>
+                            <li>Plugins > Añadir Nuevo</li>
+                            <li>Sube eva-chatbot-widget.zip</li>
+                            <li>Activa el plugin</li>
+                            <li>Ve a "Eva Chatbot" en el menú</li>
+                        </ol>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>⚙️ Configuración Básica</h5>
+                        <ul>
+                            <li>URL del Servidor</li>
+                            <li>Mensaje de Bienvenida</li>
+                            <li>Posición del widget</li>
+                            <li>Páginas donde mostrar</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Personalización Visual</h3>
+            <table class="guide-table">
+                <tr>
+                    <th>Elemento</th>
+                    <th>Opciones</th>
+                </tr>
+                <tr>
+                    <td>Color Principal</td>
+                    <td>Botón y encabezado</td>
+                </tr>
+                <tr>
+                    <td>Tamaño del Botón</td>
+                    <td>Pequeño, Mediano, Grande</td>
+                </tr>
+                <tr>
+                    <td>Posición</td>
+                    <td>4 esquinas disponibles</td>
+                </tr>
+                <tr>
+                    <td>Auto-apertura</td>
+                    <td>Configurable en segundos</td>
+                </tr>
+            </table>
+
+            <h3>Respuestas Rápidas</h3>
+            <p>Botones predefinidos para acciones comunes:</p>
+            <ul class="feature-list">
+                <li>"Ver catálogo"</li>
+                <li>"Estado de mi pedido"</li>
+                <li>"Hablar con alguien"</li>
+                <li>"Horario de atención"</li>
+            </ul>
+        </section>
+
+        <!-- Reports Section -->
+        <section id="reports" class="guide-section">
+            <h2>📈 Métricas Básicas</h2>
+            
+            <h3>Información Disponible</h3>
+            <p>El panel de administración muestra métricas básicas del sistema:</p>
+            
+            <div class="feature-card">
+                <h5>📊 Métricas del Dashboard</h5>
+                <ul>
+                    <li><strong>Conversaciones hoy:</strong> Total en las últimas 24 horas</li>
+                    <li><strong>Usuarios únicos hoy:</strong> Clientes diferentes</li>
+                    <li><strong>Total conversaciones (30 días):</strong> Resumen mensual</li>
+                    <li><strong>Documentos en base de conocimiento:</strong> Total disponible</li>
+                    <li><strong>Distribución por plataforma:</strong> WordPress vs WhatsApp</li>
+                </ul>
+            </div>
+
+            <h3>Registro de Actividad</h3>
+            <div class="feature-card">
+                <h5>Log de Administración</h5>
+                <p>Se registran todas las acciones realizadas por administradores:</p>
+                <ul>
+                    <li>Cambios en configuración</li>
+                    <li>Modificaciones en base de conocimiento</li>
+                    <li>Accesos al panel</li>
+                    <li>Fecha, hora e IP de cada acción</li>
+                </ul>
+            </div>
+
+            <div class="tip-box">
+                <strong>💡 Nota:</strong> El sistema no incluye reportes avanzados, exportación de datos, o análisis detallados. Las métricas son básicas para monitoreo general del uso.
+            </div>
+        </section>
+
+
+        <!-- Best Practices Section -->
+        <section id="best-practices" class="guide-section">
+            <h2>💡 Mejores Prácticas</h2>
+            
+            <h3>Para Mejor Rendimiento</h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>📚 Base de Conocimiento</h5>
+                        <ul class="feature-list">
+                            <li>Mantén información actualizada</li>
+                            <li>Usa lenguaje simple y claro</li>
+                            <li>Organiza por categorías lógicas</li>
+                            <li>Incluye variaciones de preguntas</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>⚙️ Configuración</h5>
+                        <ul class="feature-list">
+                            <li>Ajusta personalidad según tu marca</li>
+                            <li>Define horarios realistas</li>
+                            <li>Configura escalamiento apropiado</li>
+                            <li>Personaliza mensajes de error</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Footer -->
+        <div class="guide-section text-center" style="background: var(--gray-100); margin-top: 3rem;">
+            <p><strong>Eva AI Assistant</strong></p>
+            <p>Versión de la Guía: 1.0 | Última Actualización: Agosto 2025</p>
+            <p>Desarrollado por <a href="https://vanguardia.dev" target="_blank">Vanguardia.dev</a></p>
+        </div>
+    </div>
+
+    <!-- Back to Top Button -->
+    <button id="backToTop" onclick="scrollToTop()">
+        <i class="bi bi-arrow-up"></i>
+    </button>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href').substring(1);
+                const targetSection = document.getElementById(targetId);
+                
+                // Remove active class from all links
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                // Add active class to clicked link
+                this.classList.add('active');
+                
+                // Smooth scroll to section
+                targetSection.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            });
+        });
+
+        // Show/hide back to top button
+        window.addEventListener('scroll', function() {
+            const backToTopButton = document.getElementById('backToTop');
+            if (window.scrollY > 300) {
+                backToTopButton.style.display = 'flex';
+            } else {
+                backToTopButton.style.display = 'none';
+            }
+
+            // Update active navigation link based on scroll position
+            updateActiveNavLink();
+        });
+
+        // Scroll to top function
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+
+        // Update active navigation link based on scroll position
+        function updateActiveNavLink() {
+            const sections = document.querySelectorAll('.guide-section');
+            const navLinks = document.querySelectorAll('.nav-link');
+            
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                if (window.scrollY >= (sectionTop - 150)) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        // Print functionality
+        window.addEventListener('beforeprint', function() {
+            document.body.classList.add('printing');
+        });
+
+        window.addEventListener('afterprint', function() {
+            document.body.classList.remove('printing');
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set first nav link as active
+            document.querySelector('.nav-link').classList.add('active');
+        });
+    </script>
+</body>
+</html>

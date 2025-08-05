@@ -1,0 +1,28 @@
+[Unit]
+Description=Eva AI Backup Service
+Documentation=https://github.com/vanguardia/eva-ai
+After=eva-ai.service
+Requires=eva-ai.service
+
+[Service]
+Type=oneshot
+User=eva
+Group=docker
+WorkingDirectory=/opt/eva-ai
+
+# Comando de backup
+ExecStart=/opt/eva-ai/scripts/backup.sh
+
+# Timeout de 30 minutos para el backup
+TimeoutStartSec=1800
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=eva-backup
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/eva-ai/backups

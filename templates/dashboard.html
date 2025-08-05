@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Sistema de Atención al Cliente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div x-data="dashboard()" class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">
+                <i class="fas fa-tachometer-alt text-blue-600 mr-3"></i>
+                Dashboard - Sistema de Atención al Cliente
+            </h1>
+            <p class="text-gray-600">Recambios Eléctricos - Búsqueda Híbrida & Sincronización WooCommerce</p>
+            <p class="text-sm text-gray-500">Última actualización: {{ timestamp }}</p>
+        </div>
+
+        <!-- Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Database Status -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">Base de Conocimiento</h3>
+                        <p class="text-3xl font-bold text-blue-600">{{ db_stats.active_entries or 0 }}</p>
+                        <p class="text-sm text-gray-500">entradas activas</p>
+                    </div>
+                    <div class="text-4xl text-blue-500">
+                        <i class="fas fa-database"></i>
+                    </div>
+                </div>
+                <div class="mt-4 text-sm">
+                    <div class="flex justify-between">
+                        <span>Productos:</span>
+                        <span class="font-semibold">{{ db_stats.active_products or 0 }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Categorías:</span>
+                        <span class="font-semibold">{{ db_stats.categories or 0 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sync Status -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">Sincronización</h3>
+                        <p class="text-2xl font-bold" 
+                           :class="syncStatus.sync_needed ? 'text-orange-600' : 'text-green-600'">
+                            <span x-text="syncStatus.sync_needed ? 'Pendiente' : 'Actualizado'"></span>
+                        </p>
+                        <p class="text-sm text-gray-500">estado actual</p>
+                    </div>
+                    <div class="text-4xl" 
+                         :class="syncStatus.sync_needed ? 'text-orange-500' : 'text-green-500'">
+                        <i class="fas fa-sync-alt"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <button @click="triggerSync()" 
+                            :disabled="syncing"
+                            class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md text-sm transition-colors">
+                        <span x-show="!syncing">
+                            <i class="fas fa-sync mr-2"></i>Sincronizar Ahora
+                        </span>
+                        <span x-show="syncing">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>Sincronizando...
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Webhooks Status -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">Webhooks</h3>
+                        <p class="text-2xl font-bold" 
+                           :class="webhookStats.webhook_secret_configured ? 'text-green-600' : 'text-red-600'">
+                            <span x-text="webhookStats.webhook_secret_configured ? 'Activo' : 'Inactivo'"></span>
+                        </p>
+                        <p class="text-sm text-gray-500">configuración</p>
+                    </div>
+                    <div class="text-4xl" 
+                         :class="webhookStats.webhook_secret_configured ? 'text-green-500' : 'text-red-500'">
+                        <i class="fas fa-webhook"></i>
+                    </div>
+                </div>
+                <div class="mt-4 text-sm">
+                    <p class="text-gray-600">Eventos soportados:</p>
+                    <p class="font-semibold">{{ webhook_stats.supported_events|length if webhook_stats.supported_events else 0 }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-search text-purple-600 mr-2"></i>
+                Búsqueda Híbrida
+            </h2>
+            
+            <div class="flex flex-col md:flex-row gap-4 mb-4">
+                <div class="flex-1">
+                    <input type="text" 
+                           x-model="searchQuery"
+                           @keyup.enter="performSearch()"
+                           placeholder="Buscar productos, categorías o información..."
+                           class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div class="flex gap-2">
+                    <select x-model="searchType" class="px-3 py-2 border border-gray-300 rounded-md">
+                        <option value="hybrid">Híbrida</option>
+                        <option value="vector">Semántica</option>
+                        <option value="text">Texto</option>
+                    </select>
+                    <button @click="performSearch()" 
+                            :disabled="searching || !searchQuery.trim()"
+                            class="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-md transition-colors">
+                        <span x-show="!searching">
+                            <i class="fas fa-search mr-2"></i>Buscar
+                        </span>
+                        <span x-show="searching">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>Buscando...
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Results -->
+            <div x-show="searchResults.length > 0" class="mt-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">
+                    Resultados (<span x-text="searchResults.length"></span>)
+                </h3>
+                <div class="space-y-3">
+                    <template x-for="result in searchResults" :key="result.id">
+                        <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <h4 class="font-semibold text-gray-800" x-text="result.title"></h4>
+                                    <p class="text-sm text-gray-600 mt-1" x-text="result.content.substring(0, 200) + '...'"></p>
+                                    <div class="flex items-center mt-2 space-x-4">
+                                        <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded" 
+                                              x-text="result.content_type"></span>
+                                        <span class="text-xs text-gray-500" 
+                                              x-text="'Puntuación: ' + (result.rrf_score || result.similarity || result.score || 0).toFixed(3)"></span>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <template x-if="result.metadata && result.metadata.price">
+                                        <span class="text-lg font-bold text-green-600" 
+                                              x-text="'$' + result.metadata.price"></span>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div x-show="searchPerformed && searchResults.length === 0" class="mt-6 text-center text-gray-500">
+                <i class="fas fa-search text-4xl mb-2"></i>
+                <p>No se encontraron resultados para tu búsqueda</p>
+            </div>
+        </div>
+
+        <!-- System Stats -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Database Details -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-chart-bar text-green-600 mr-2"></i>
+                    Estadísticas de Base de Datos
+                </h2>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Total de entradas:</span>
+                        <span class="font-semibold">{{ db_stats.total_entries or 0 }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Entradas activas:</span>
+                        <span class="font-semibold text-green-600">{{ db_stats.active_entries or 0 }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Productos totales:</span>
+                        <span class="font-semibold">{{ db_stats.products or 0 }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Productos activos:</span>
+                        <span class="font-semibold text-blue-600">{{ db_stats.active_products or 0 }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Categorías:</span>
+                        <span class="font-semibold">{{ db_stats.categories or 0 }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Información de empresa:</span>
+                        <span class="font-semibold">{{ db_stats.company_info or 0 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-clock text-orange-600 mr-2"></i>
+                    Actividad Reciente
+                </h2>
+                <div class="space-y-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span class="text-sm text-gray-600">Sistema iniciado correctamente</span>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span class="text-sm text-gray-600">Base de datos conectada</span>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
+                        <span class="text-sm text-gray-600">Servicio de embeddings activo</span>
+                    </div>
+                    <template x-if="syncStatus.last_sync">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-2 h-2 bg-orange-500 rounded-full"></div>
+                            <span class="text-sm text-gray-600">
+                                Última sincronización: <span x-text="formatDate(syncStatus.last_sync)"></span>
+                            </span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-8 text-center text-gray-500 text-sm">
+            <p>Sistema de Atención al Cliente v2.0 - Recambios Eléctricos</p>
+            <p>Búsqueda Híbrida con PostgreSQL + pgvector + OpenAI</p>
+        </div>
+    </div>
+
+    <script>
+        function dashboard() {
+            return {
+                // Data from server
+                syncStatus: {{ sync_status|tojson|safe if sync_status else '{}' }},
+                webhookStats: {{ webhook_stats|tojson|safe if webhook_stats else '{}' }},
+                
+                // UI State
+                syncing: false,
+                searching: false,
+                searchQuery: '',
+                searchType: 'hybrid',
+                searchResults: [],
+                searchPerformed: false,
+
+                // Methods
+                async triggerSync() {
+                    this.syncing = true;
+                    try {
+                        const response = await fetch('/api/sync/products', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ force_update: false })
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (response.ok) {
+                            alert('Sincronización iniciada correctamente');
+                            // Refresh page after a delay
+                            setTimeout(() => location.reload(), 2000);
+                        } else {
+                            alert('Error: ' + (result.detail || 'Error desconocido'));
+                        }
+                    } catch (error) {
+                        alert('Error de conexión: ' + error.message);
+                    } finally {
+                        this.syncing = false;
+                    }
+                },
+
+                async performSearch() {
+                    if (!this.searchQuery.trim()) return;
+                    
+                    this.searching = true;
+                    this.searchPerformed = true;
+                    
+                    try {
+                        const response = await fetch('/api/search', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                query: this.searchQuery,
+                                search_type: this.searchType,
+                                limit: 10
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (response.ok) {
+                            this.searchResults = result.results || [];
+                        } else {
+                            alert('Error en búsqueda: ' + (result.detail || 'Error desconocido'));
+                            this.searchResults = [];
+                        }
+                    } catch (error) {
+                        alert('Error de conexión: ' + error.message);
+                        this.searchResults = [];
+                    } finally {
+                        this.searching = false;
+                    }
+                },
+
+                formatDate(dateString) {
+                    if (!dateString) return 'No disponible';
+                    return new Date(dateString).toLocaleString('es-ES');
+                }
+            }
+        }
+    </script>
+</body>
+</html> 

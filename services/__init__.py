@@ -1,0 +1,1 @@
+# Módulo de servicios para el servidor MCP de El Corte Eléctrico 

@@ -1,0 +1,1 @@
+# Módulo de configuración para el servidor MCP de El Corte Eléctrico 

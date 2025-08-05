@@ -1,0 +1,18 @@
+[Unit]
+Description=Eva AI Daily Backup Timer
+Documentation=https://github.com/vanguardia/eva-ai
+Requires=eva-backup.service
+
+[Timer]
+# Ejecutar todos los días a las 2:00 AM
+OnCalendar=daily
+Persistent=true
+
+# Delay random hasta 30 minutos para evitar picos de carga
+RandomizedDelaySec=1800
+
+# Accuracy de 1 minuto
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

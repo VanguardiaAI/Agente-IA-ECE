@@ -1,0 +1,135 @@
+# === PYTHON ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# === VIRTUAL ENVIRONMENTS ===
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# === ENVIRONMENT FILES ===
+.env
+.env.*
+env.*
+!env.*.example
+*.env
+!*.env.example
+
+# === DATABASE ===
+*.db
+*.sqlite
+*.sqlite3
+docker/postgres/data/
+docker/postgres/backups/
+
+# === LOGS ===
+*.log
+logs/
+log/
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === OS ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === CURSOR ===
+.cursor/
+.cursorignore
+
+# === DOCKER ===
+.dockerignore
+
+# === TEMPORARY FILES ===
+*.tmp
+*.temp
+.cache/
+.pytest_cache/
+
+# === COVERAGE ===
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# === JUPYTER NOTEBOOK ===
+.ipynb_checkpoints
+
+# === PYTHON ENVIRONMENT ===
+.python-version
+
+# === WOOCOMMERCE PLUGIN ===
+eva-chat-widget/node_modules/
+eva-chat-widget/package-lock.json
+
+# === SENSITIVE DATA ===
+# Archivos que pueden contener información sensible
+config/local.py
+config/production.py
+secrets.json
+credentials.json
+
+# === BACKUP FILES ===
+*.bak
+*.backup
+*.old
+
+# === COMPILED FILES ===
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.so
+
+# === DOCUMENTATION BUILDS ===
+docs/_build/
+site/
+
+# === MYPY ===
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# === TEST RESULTS ===
+*test_report*.json
+test_results*.json 

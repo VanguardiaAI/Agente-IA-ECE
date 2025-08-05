@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eva - Asistente Virtual | El Corte Eléctrico</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-container {
+            background: white;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            width: 450px;
+            height: 700px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: #000;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            border-bottom: 1px solid #222;
+        }
+
+        .chat-header h1 {
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+        }
+
+        .chat-header p {
+            opacity: 0.7;
+            font-size: 13px;
+            font-weight: 300;
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4CAF50;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #fafafa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            animation: fadeIn 0.2s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.assistant {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 4px;
+            word-wrap: break-word;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
+        .message.user .message-content {
+            background: #000;
+            color: white;
+        }
+
+        .message.assistant .message-content {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+
+        .message-time {
+            font-size: 11px;
+            opacity: 0.5;
+            margin-top: 5px;
+        }
+
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            padding: 10px 16px;
+            background: white;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            border: 1px solid #e0e0e0;
+            max-width: 80px;
+        }
+
+        .typing-indicator span {
+            height: 6px;
+            width: 6px;
+            border-radius: 50%;
+            background: #999;
+            display: inline-block;
+            margin-right: 3px;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
+        }
+
+        .chat-input {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .message-input {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px 16px;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+            transition: border-color 0.2s ease;
+            max-height: 100px;
+            min-height: 45px;
+            font-family: inherit;
+        }
+
+        .message-input:focus {
+            border-color: #000;
+        }
+
+        .send-button {
+            background: #000;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            width: 45px;
+            height: 45px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .send-button:hover {
+            background: #333;
+        }
+
+        .send-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .quick-action {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 8px 15px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .quick-action:hover {
+            background: #000;
+            color: white;
+            border-color: #000;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            color: white;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .connection-status.connected {
+            background: #000;
+        }
+
+        .connection-status.disconnected {
+            background: #666;
+        }
+
+        .connection-status.connecting {
+            background: #999;
+        }
+
+        .system-message {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin: 10px 0;
+            font-style: italic;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .chat-container {
+                width: 100vw;
+                height: 100vh;
+                border-radius: 0;
+            }
+        }
+
+        /* Scroll personalizado */
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #ddd;
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #bbb;
+        }
+
+        /* Estilos para elementos formateados */
+        .message-content strong {
+            font-weight: 600;
+        }
+
+        .message-content em {
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">Conectando</div>
+    
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <h1 id="botNameHeader">EVA</h1>
+            <p id="companyInfo">Asistente Virtual - El Corte Eléctrico</p>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <!-- El mensaje de bienvenida se cargará dinámicamente -->
+        </div>
+
+        <div class="chat-input">
+            <div class="quick-actions">
+                <button class="quick-action" onclick="sendQuickMessage('Hola')">Saludar</button>
+                <button class="quick-action" onclick="sendQuickMessage('Busco un diferencial')">Productos</button>
+                <button class="quick-action" onclick="sendQuickMessage('Estado de mi pedido')">Mi pedido</button>
+                <button class="quick-action" onclick="sendQuickMessage('Información de envíos')">Envíos</button>
+            </div>
+            
+            <div class="input-container">
+                <textarea 
+                    id="messageInput" 
+                    class="message-input" 
+                    placeholder="Escribe tu mensaje..."
+                    rows="1"
+                ></textarea>
+                <button id="sendButton" class="send-button" onclick="sendMessage()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ChatApp {
+            constructor() {
+                this.socket = null;
+                this.clientId = this.generateClientId();
+                this.isConnected = false;
+                this.messageInput = document.getElementById('messageInput');
+                this.sendButton = document.getElementById('sendButton');
+                this.chatMessages = document.getElementById('chatMessages');
+                this.connectionStatus = document.getElementById('connectionStatus');
+                this.statusIndicator = document.getElementById('statusIndicator');
+                
+                this.init();
+            }
+
+            generateClientId() {
+                return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+            }
+
+            async init() {
+                await this.loadBotConfiguration();
+                this.connectWebSocket();
+                this.setupEventListeners();
+                this.updateConnectionStatus('connecting');
+            }
+
+            async loadBotConfiguration() {
+                try {
+                    const response = await fetch('/api/bot/config');
+                    const config = await response.json();
+                    
+                    // Actualizar el header con la configuración
+                    document.getElementById('botNameHeader').textContent = config.bot_name.toUpperCase();
+                    document.getElementById('companyInfo').textContent = `Asistente Virtual - ${config.company_name}`;
+                    
+                    // Guardar configuración para uso posterior
+                    this.botConfig = config;
+                    
+                } catch (error) {
+                    console.error('Error cargando configuración del bot:', error);
+                    // Usar valores por defecto si falla
+                    this.botConfig = {
+                        bot_name: 'Eva',
+                        company_name: 'El Corte Eléctrico',
+                        welcome_message: 'Hola, ¿en qué puedo ayudarte hoy?'
+                    };
+                }
+            }
+
+            connectWebSocket() {
+                const wsUrl = `ws://${window.location.host}/ws/chat/${this.clientId}`;
+                
+                try {
+                    this.socket = new WebSocket(wsUrl);
+                    
+                    this.socket.onopen = () => {
+                        console.log('WebSocket conectado');
+                        this.isConnected = true;
+                        this.updateConnectionStatus('connected');
+                    };
+
+                    this.socket.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.handleMessage(data);
+                    };
+
+                    this.socket.onclose = () => {
+                        console.log('WebSocket desconectado');
+                        this.isConnected = false;
+                        this.updateConnectionStatus('disconnected');
+                        this.showSystemMessage('Conexión perdida. Reintentando...');
+                        
+                        // Reintentar conexión después de 3 segundos
+                        setTimeout(() => {
+                            this.connectWebSocket();
+                        }, 3000);
+                    };
+
+                    this.socket.onerror = (error) => {
+                        console.error('Error WebSocket:', error);
+                        this.updateConnectionStatus('disconnected');
+                    };
+
+                } catch (error) {
+                    console.error('Error creando WebSocket:', error);
+                    this.updateConnectionStatus('disconnected');
+                }
+            }
+
+            setupEventListeners() {
+                // Enter para enviar mensaje
+                this.messageInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+
+                // Auto-resize del textarea
+                this.messageInput.addEventListener('input', () => {
+                    this.messageInput.style.height = 'auto';
+                    this.messageInput.style.height = Math.min(this.messageInput.scrollHeight, 100) + 'px';
+                });
+
+                // Botón enviar
+                this.sendButton.addEventListener('click', () => {
+                    this.sendMessage();
+                });
+            }
+
+            updateConnectionStatus(status) {
+                const statusEl = this.connectionStatus;
+                const indicatorEl = this.statusIndicator;
+                
+                statusEl.className = `connection-status ${status}`;
+                
+                switch(status) {
+                    case 'connected':
+                        statusEl.textContent = 'CONECTADO';
+                        indicatorEl.style.background = '#4CAF50';
+                        this.sendButton.disabled = false;
+                        break;
+                    case 'connecting':
+                        statusEl.textContent = 'CONECTANDO';
+                        indicatorEl.style.background = '#999';
+                        this.sendButton.disabled = true;
+                        break;
+                    case 'disconnected':
+                        statusEl.textContent = 'DESCONECTADO';
+                        indicatorEl.style.background = '#666';
+                        this.sendButton.disabled = true;
+                        break;
+                }
+            }
+
+            showSystemMessage(message) {
+                const messageEl = document.createElement('div');
+                messageEl.className = 'system-message';
+                messageEl.textContent = message;
+                this.chatMessages.appendChild(messageEl);
+                this.scrollToBottom();
+            }
+
+            sendMessage() {
+                const message = this.messageInput.value.trim();
+                
+                if (!message || !this.isConnected) {
+                    return;
+                }
+
+                // Mostrar mensaje del usuario
+                this.addMessage('user', message);
+                
+                // Mostrar indicador de escritura
+                this.showTypingIndicator();
+
+                // Enviar a través de WebSocket
+                try {
+                    this.socket.send(JSON.stringify({
+                        message: message,
+                        timestamp: new Date().toISOString(),
+                        client_id: this.clientId
+                    }));
+                } catch (error) {
+                    console.error('Error enviando mensaje:', error);
+                    this.hideTypingIndicator();
+                    this.addMessage('assistant', 'Lo siento, hubo un error. Intenta de nuevo.');
+                }
+
+                // Limpiar input
+                this.messageInput.value = '';
+                this.messageInput.style.height = 'auto';
+            }
+
+            handleMessage(data) {
+                this.hideTypingIndicator();
+                
+                switch(data.type) {
+                    case 'welcome':
+                        // Mensaje de bienvenida automático
+                        this.addMessage('assistant', data.message);
+                        break;
+                    case 'agent_response':
+                        this.addMessage('assistant', data.message);
+                        break;
+                    case 'error':
+                        this.addMessage('assistant', data.message);
+                        break;
+                    case 'fallback':
+                        this.addMessage('assistant', data.message);
+                        break;
+                    default:
+                        console.log('Mensaje desconocido:', data);
+                }
+            }
+
+            addMessage(role, content) {
+                const messageEl = document.createElement('div');
+                messageEl.className = `message ${role}`;
+                
+                const contentEl = document.createElement('div');
+                contentEl.className = 'message-content';
+                
+                // Formatear mensaje con markdown básico
+                contentEl.innerHTML = this.formatMessage(content);
+                
+                const timeEl = document.createElement('div');
+                timeEl.className = 'message-time';
+                timeEl.textContent = new Date().toLocaleTimeString('es-ES', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                contentEl.appendChild(timeEl);
+                messageEl.appendChild(contentEl);
+                
+                this.chatMessages.appendChild(messageEl);
+                this.scrollToBottom();
+            }
+
+            formatMessage(content) {
+                // Formateo básico de markdown sin emojis
+                return content
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // **bold**
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')  // *italic*
+                    .replace(/\n/g, '<br>')  // saltos de línea
+                    // Remover emojis comunes o reemplazarlos con texto
+                    .replace(/✅/g, '[OK]')
+                    .replace(/❌/g, '[X]')
+                    .replace(/🔍/g, '')
+                    .replace(/💰/g, '')
+                    .replace(/📦/g, '')
+                    .replace(/🚚/g, '')
+                    .replace(/💬/g, '')
+                    .replace(/👋/g, '')
+                    .replace(/💡/g, '');
+            }
+
+            showTypingIndicator() {
+                const typingEl = document.createElement('div');
+                typingEl.className = 'typing-indicator';
+                typingEl.id = 'typingIndicator';
+                typingEl.innerHTML = '<span></span><span></span><span></span>';
+                
+                this.chatMessages.appendChild(typingEl);
+                typingEl.style.display = 'flex';
+                this.scrollToBottom();
+            }
+
+            hideTypingIndicator() {
+                const typingEl = document.getElementById('typingIndicator');
+                if (typingEl) {
+                    typingEl.remove();
+                }
+            }
+
+            scrollToBottom() {
+                setTimeout(() => {
+                    this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+                }, 100);
+            }
+        }
+
+        // Funciones globales para acciones rápidas
+        function sendQuickMessage(message) {
+            const messageInput = document.getElementById('messageInput');
+            messageInput.value = message;
+            app.sendMessage();
+        }
+
+        // Inicializar aplicación
+        const app = new ChatApp();
+
+        // Debug en consola
+        console.log('Chat App inicializada');
+        console.log('Client ID:', app.clientId);
+    </script>
+</body>
+</html>
