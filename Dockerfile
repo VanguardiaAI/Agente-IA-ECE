@@ -31,6 +31,7 @@ COPY config/ ./config/
 COPY tools/ ./tools/
 COPY services/ ./services/
 COPY src/ ./src/
+COPY api/ ./api/
 
 # Crear directorios necesarios
 RUN mkdir -p /app/logs /app/knowledge
@@ -57,6 +58,7 @@ COPY app.py .
 COPY config/ ./config/
 COPY services/ ./services/
 COPY src/ ./src/
+COPY api/ ./api/
 COPY templates/ ./templates/
 COPY static/ ./static/
 
