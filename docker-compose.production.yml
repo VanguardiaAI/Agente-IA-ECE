@@ -42,7 +42,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     volumes:
       - ./knowledge:/app/knowledge:ro
       - ./logs:/app/logs
@@ -75,7 +75,7 @@ services:
       - postgres
       - mcp-server
     ports:
-      - "127.0.0.1:8080:8080"
+      - "8080:8080"
     volumes:
       - ./knowledge:/app/knowledge:ro
       - ./templates:/app/templates:ro
@@ -99,7 +99,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.production.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./static:/usr/share/nginx/html/static:ro
       - nginx_cache:/var/cache/nginx
     depends_on:
