@@ -31,5 +31,8 @@ docker logs eva-nginx-prod --tail 10 2>&1
 
 # Test the main website
 echo -e "\n🌐 Testing main website:"
-echo -n "https://ia.elcorteelectrico.com status: "
+echo -n "HTTP (port 80): "
+curl -s -o /dev/null -w "%{http_code}" http://ia.elcorteelectrico.com || echo "Failed"
+echo ""
+echo -n "HTTPS (port 443): "
 curl -k -s -o /dev/null -w "%{http_code}" https://ia.elcorteelectrico.com || echo "Failed"
