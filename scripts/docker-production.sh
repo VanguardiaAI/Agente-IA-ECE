@@ -105,21 +105,21 @@ start() {
     chmod +x docker/postgres/backup-script.sh
     
     # Iniciar servicios
-    docker-compose up -d
+    docker-compose -f "$DOCKER_COMPOSE_FILE" up -d
     
     # Esperar a que PostgreSQL esté listo
     log "Esperando a que PostgreSQL esté listo..."
     sleep 10
     
     # Verificar estado de servicios
-    if docker-compose ps | grep -q "Up"; then
+    if docker-compose -f "$DOCKER_COMPOSE_FILE" ps | grep -q "Up"; then
         success "Servicios iniciados correctamente"
         log "PostgreSQL disponible en: localhost:5432"
-        log "Base de datos: knowledge_base"
-        log "Usuario: chatbot_user"
+        log "Base de datos: ${POSTGRES_DB:-eva_db}"
+        log "Usuario: ${POSTGRES_USER:-eva_user}"
     else
         error "Error al iniciar servicios"
-        docker-compose logs
+        docker-compose -f "$DOCKER_COMPOSE_FILE" logs
         exit 1
     fi
 }
@@ -127,7 +127,7 @@ start() {
 # Función para detener servicios
 stop() {
     log "Deteniendo servicios..."
-    docker-compose down
+    docker-compose -f "$DOCKER_COMPOSE_FILE" down
     success "Servicios detenidos"
 }
 
@@ -141,9 +141,9 @@ restart() {
 # Función para ver logs
 logs() {
     if [ -z "$2" ]; then
-        docker-compose logs -f
+        docker-compose -f "$DOCKER_COMPOSE_FILE" logs -f
     else
-        docker-compose logs -f "$2"
+        docker-compose -f "$DOCKER_COMPOSE_FILE" logs -f "$2"
     fi
 }
 
@@ -151,14 +151,14 @@ logs() {
 backup() {
     log "Realizando backup manual..."
     
-    if ! docker-compose ps postgres | grep -q "Up"; then
+    if ! docker-compose -f "$DOCKER_COMPOSE_FILE" ps postgres | grep -q "Up"; then
         error "PostgreSQL no está corriendo"
         exit 1
     fi
     
     BACKUP_FILE="docker/postgres/backups/manual_backup_$(date +%Y%m%d_%H%M%S).sql"
     
-    if docker-compose exec postgres pg_dump -U chatbot_user knowledge_base > "$BACKUP_FILE"; then
+    if docker-compose -f "$DOCKER_COMPOSE_FILE" exec postgres pg_dump -U ${POSTGRES_USER:-eva_user} ${POSTGRES_DB:-eva_db} > "$BACKUP_FILE"; then
         success "Backup creado: $BACKUP_FILE"
         
         # Comprimir backup
@@ -203,7 +203,7 @@ restore() {
     fi
     
     # Restaurar backup
-    if docker-compose exec -T postgres psql -U chatbot_user -d knowledge_base < "$BACKUP_FILE"; then
+    if docker-compose -f "$DOCKER_COMPOSE_FILE" exec -T postgres psql -U ${POSTGRES_USER:-eva_user} -d ${POSTGRES_DB:-eva_db} < "$BACKUP_FILE"; then
         success "Backup restaurado correctamente"
     else
         error "Error restaurando backup"
@@ -219,7 +219,7 @@ restore() {
 # Función para ver estado de servicios
 status() {
     log "Estado de servicios:"
-    docker-compose ps
+    docker-compose -f "$DOCKER_COMPOSE_FILE" ps
     
     log "Uso de recursos:"
     docker stats --no-stream
@@ -236,7 +236,7 @@ update() {
     stop
     
     # Actualizar imágenes
-    docker-compose pull
+    docker-compose -f "$DOCKER_COMPOSE_FILE" pull
     
     # Iniciar servicios
     start
