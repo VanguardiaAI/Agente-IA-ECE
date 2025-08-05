@@ -273,6 +273,11 @@ async def admin_dashboard(request: Request):
         "request": request
     })
 
+@app.get("/admin/", response_class=HTMLResponse)
+async def admin_dashboard_slash(request: Request):
+    """Dashboard del panel de administración - maneja /admin/ para evitar redirecciones"""
+    return await admin_dashboard(request)
+
 @app.get("/admin/user-guide", response_class=HTMLResponse)
 async def admin_user_guide(request: Request):
     """Guía de usuario para administradores"""
