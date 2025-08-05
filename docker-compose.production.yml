@@ -17,7 +17,7 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-eva_user}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-eva_user} -d ${POSTGRES_DB:-eva_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -132,31 +132,31 @@ services:
       timeout: 5s
       retries: 5
 
-  # Servicio de backup automático
-  backup:
-    image: postgres:14-alpine
-    container_name: eva-backup-prod
-    restart: always
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_DB: ${POSTGRES_DB:-eva_db}
-      POSTGRES_USER: ${POSTGRES_USER:-eva_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      BACKUP_SCHEDULE: "0 2 * * *"  # 2 AM todos los días
-    volumes:
-      - ./backups:/backups
-      - ./scripts/backup.sh:/backup.sh:ro
-    entrypoint: ["/bin/sh", "-c"]
-    command: |
-      "while true; do
-        echo 'Esperando próximo backup...'
-        sleep 86400
-        /backup.sh
-      done"
-    depends_on:
-      - postgres
-    networks:
-      - eva_network
+  # Backup service disabled - use cron job instead
+  # backup:
+  #   image: postgres:14-alpine
+  #   container_name: eva-backup-prod
+  #   restart: always
+  #   environment:
+  #     POSTGRES_HOST: postgres
+  #     POSTGRES_DB: ${POSTGRES_DB:-eva_db}
+  #     POSTGRES_USER: ${POSTGRES_USER:-eva_user}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #     BACKUP_SCHEDULE: "0 2 * * *"  # 2 AM todos los días
+  #   volumes:
+  #     - ./backups:/backups
+  #     - ./scripts/backup.sh:/backup.sh:ro
+  #   entrypoint: ["/bin/sh", "-c"]
+  #   command: |
+  #     "while true; do
+  #       echo 'Esperando próximo backup...'
+  #       sleep 86400
+  #       /backup.sh
+  #     done"
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - eva_network
 
 networks:
   eva_network:
