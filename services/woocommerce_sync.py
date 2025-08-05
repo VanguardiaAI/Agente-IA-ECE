@@ -494,7 +494,7 @@ class WooCommerceSyncService:
                 "total_products": stats.get("products", 0),
                 "total_categories": stats.get("categories", 0),
                 "active_products": stats.get("active_products", 0),
-                "last_sync": last_sync,
+                "last_sync": last_sync.isoformat() if last_sync else None,
                 "sync_needed": self._is_sync_needed(last_sync)
             }
             
