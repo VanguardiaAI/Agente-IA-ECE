@@ -42,10 +42,15 @@ else
     exit 1
 fi
 
-# Export the correct variables
-export POSTGRES_DB=eva_db
-export POSTGRES_USER=eva_user
-export POSTGRES_PASSWORD=eva_secure_password_2025!
+# Export the correct variables from .env file
+source .env
+export POSTGRES_DB="${POSTGRES_DB:-eva_db}"
+export POSTGRES_USER="${POSTGRES_USER:-eva_user}"
+export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-chatbot_secure_2025!}"
+
+echo "Using database: $POSTGRES_DB"
+echo "Using user: $POSTGRES_USER"
+echo "Using password: [hidden]"
 
 # Start ONLY PostgreSQL with a clean state
 echo "🚀 Starting PostgreSQL with clean state..."
