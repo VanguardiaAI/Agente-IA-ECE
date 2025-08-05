@@ -22,6 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 import json
+from json import JSONEncoder
 
 # Importar servicios
 from services.database import db_service
@@ -53,13 +54,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Custom JSON encoder para manejar datetime objects
+class DateTimeEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
 # Crear aplicación FastAPI
 app = FastAPI(
     title="Sistema de Atención al Cliente - Recambios Eléctricos",
     description="API completa con búsqueda híbrida, webhooks y sincronización WooCommerce",
     version="2.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    default_response_class=JSONResponse
 )
 
 # Configurar CORS
@@ -211,6 +220,22 @@ async def dashboard(request: Request):
                 agent_stats = hybrid_agent.get_conversation_stats()
             except:
                 agent_stats = {"status": "error"}
+        
+        # Función auxiliar para convertir datetime a string recursivamente
+        def serialize_dates(obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, dict):
+                return {k: serialize_dates(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [serialize_dates(item) for item in obj]
+            return obj
+        
+        # Serializar todas las fechas en los objetos antes de pasarlos al template
+        db_stats = serialize_dates(db_stats) if db_stats else {}
+        sync_status = serialize_dates(sync_status) if sync_status else {}
+        webhook_stats = serialize_dates(webhook_stats) if webhook_stats else {}
+        agent_stats = serialize_dates(agent_stats) if agent_stats else {}
         
         return templates.TemplateResponse("dashboard.html", {
             "request": request,
@@ -507,7 +532,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         body = await request.json()
         
         # Log para debugging
-        logger.info(f"WhatsApp webhook recibido: {json.dumps(body, indent=2)}")
+        logger.info(f"WhatsApp webhook recibido: {json.dumps(body, indent=2, cls=DateTimeEncoder)}")
         
         # Procesar webhook en segundo plano para responder rápido
         background_tasks.add_task(_process_whatsapp_webhook, body)
@@ -544,7 +569,7 @@ async def cart_abandoned_webhook(request: Request, background_tasks: BackgroundT
         if "application/json" in content_type:
             # Es JSON
             body = await request.json()
-            logger.info(f"JSON Body: {json.dumps(body, indent=2)}")
+            logger.info(f"JSON Body: {json.dumps(body, indent=2, cls=DateTimeEncoder)}")
             
         elif "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
             # Es form data
@@ -581,7 +606,7 @@ async def cart_abandoned_webhook(request: Request, background_tasks: BackgroundT
             )
         
         # Log completo para debugging
-        logger.info(f"Datos procesados del webhook: {json.dumps(body, indent=2, default=str)}")
+        logger.info(f"Datos procesados del webhook: {json.dumps(body, indent=2, cls=DateTimeEncoder)}")
         
         # Procesar en segundo plano para responder rápido al webhook
         background_tasks.add_task(_process_cart_abandoned, body)
@@ -747,7 +772,7 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
         }
         
         await manager.send_personal_message(
-            json.dumps(welcome_data), 
+            json.dumps(welcome_data, cls=DateTimeEncoder), 
             client_id
         )
         
@@ -784,7 +809,7 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
                     }
                     
                     await manager.send_personal_message(
-                        json.dumps(response_data), 
+                        json.dumps(response_data, cls=DateTimeEncoder), 
                         client_id
                     )
                     
@@ -796,7 +821,7 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
                         "timestamp": datetime.now().isoformat()
                     }
                     await manager.send_personal_message(
-                        json.dumps(error_response), 
+                        json.dumps(error_response, cls=DateTimeEncoder), 
                         client_id
                     )
             else:
@@ -807,7 +832,7 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
                     "timestamp": datetime.now().isoformat()
                 }
                 await manager.send_personal_message(
-                    json.dumps(fallback_response), 
+                    json.dumps(fallback_response, cls=DateTimeEncoder), 
                     client_id
                 )
                 

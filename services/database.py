@@ -524,8 +524,8 @@ class HybridDatabaseService:
                 "faqs": stats['faqs'],
                 "content_types": stats['content_types'],
                 "avg_content_length": round(stats['avg_content_length'] or 0, 2),
-                "oldest_entry": stats['oldest_entry'],
-                "newest_update": stats['newest_update'],
+                "oldest_entry": stats['oldest_entry'].isoformat() if stats['oldest_entry'] else None,
+                "newest_update": stats['newest_update'].isoformat() if stats['newest_update'] else None,
                 "by_content_type": [dict(row) for row in type_stats]
             }
     
