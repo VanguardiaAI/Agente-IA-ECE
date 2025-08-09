@@ -3,7 +3,7 @@
 ## 🌐 URLs de Acceso
 
 ### Cliente Final
-- **Chat Widget**: https://staging.elcorteelectrico.com (integrado en WordPress)
+- **Chat Widget**: https://elcorteelectrico.com (integrado en WordPress)
 - **Interfaz Web Directa**: https://ia.elcorteelectrico.com/chat
 
 ### Administración

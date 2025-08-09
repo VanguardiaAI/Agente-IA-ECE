@@ -105,13 +105,13 @@ async def test_whatsapp_integration():
 💰 ~266.2€~ *206.31€* ¡OFERTA!
 ✅ Disponible
 📋 Ref: 90920070
-🔗 Ver producto: https://staging.elcorteelectrico.com/producto/gabarron-v25-dc/
+🔗 Ver producto: https://elcorteelectrico.com/producto/gabarron-v25-dc/
 
 📦 *Gabarron ventilador ventur dc*
 💰 *101.63€* (IVA incluido)
 ✅ Disponible
 📋 Ref: 90920065
-🔗 Ver producto: https://staging.elcorteelectrico.com/producto/gabarron-ventur/
+🔗 Ver producto: https://elcorteelectrico.com/producto/gabarron-ventur/
 
 💬 *¿Necesitas ayuda personalizada?*
 Chatea con un especialista: https://wa.me/34614218122?text=Hola%2C%20necesito%20ayuda%20con%20un%20producto

@@ -4,20 +4,26 @@ Configuraciones del sistema para el servidor MCP de Tienda de Recambios Eléctri
 
 import os
 from typing import Optional
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
 # Cargar variables de entorno
 load_dotenv()
 
+# Detectar si estamos en modo desarrollo
+IS_DEVELOPMENT = os.getenv("ENVIRONMENT", "development") == "development"
+
 class Settings(BaseSettings):
     """Configuraciones de la aplicación"""
     
+    # Configuración del entorno
+    ENVIRONMENT: str = "development"
+    
     # Configuración de WooCommerce
-    WOOCOMMERCE_API_URL: str
-    WOOCOMMERCE_CONSUMER_KEY: str
-    WOOCOMMERCE_CONSUMER_SECRET: str
+    WOOCOMMERCE_API_URL: Optional[str] = "https://demo.woocommerce.com/wp-json/wc/v3" if IS_DEVELOPMENT else None
+    WOOCOMMERCE_CONSUMER_KEY: Optional[str] = "demo_key" if IS_DEVELOPMENT else None
+    WOOCOMMERCE_CONSUMER_SECRET: Optional[str] = "demo_secret" if IS_DEVELOPMENT else None
     WOOCOMMERCE_WEBHOOK_SECRET: Optional[str] = None
     
     # Configuración de PostgreSQL (reemplaza MongoDB)
@@ -25,11 +31,11 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = 5432
     POSTGRES_DB: str = "eva_db"
     POSTGRES_USER: str = "eva_user"
-    POSTGRES_PASSWORD: str
+    POSTGRES_PASSWORD: Optional[str] = "eva_password" if IS_DEVELOPMENT else None
     DATABASE_URL: Optional[str] = None
     
     # Configuración de OpenAI para embeddings
-    OPENAI_API_KEY: str
+    OPENAI_API_KEY: Optional[str] = "sk-demo-key" if IS_DEVELOPMENT else None
     OPENAI_MODEL: str = "text-embedding-3-small"
     OPENAI_MAX_TOKENS: int = 8192
     
@@ -70,13 +76,16 @@ class Settings(BaseSettings):
     @field_validator('WOOCOMMERCE_API_URL')
     @classmethod
     def validate_woocommerce_url(cls, v):
-        if not v.startswith(('http://', 'https://')):
+        if v and not v.startswith(('http://', 'https://')):
             raise ValueError('WOOCOMMERCE_API_URL debe comenzar con http:// o https://')
-        return v.rstrip('/')
+        return v.rstrip('/') if v else v
     
     @field_validator('WOOCOMMERCE_CONSUMER_KEY', 'WOOCOMMERCE_CONSUMER_SECRET')
     @classmethod
     def validate_woocommerce_keys(cls, v):
+        # En desarrollo permitimos valores demo
+        if IS_DEVELOPMENT:
+            return v
         if not v:
             raise ValueError('Las claves de WooCommerce son requeridas')
         return v
@@ -88,6 +97,29 @@ class Settings(BaseSettings):
             return v
         values = info.data
         return f"postgresql://{values.get('POSTGRES_USER')}:{values.get('POSTGRES_PASSWORD')}@{values.get('POSTGRES_HOST')}:{values.get('POSTGRES_PORT')}/{values.get('POSTGRES_DB')}"
+    
+    @model_validator(mode='after')
+    def validate_production_settings(self):
+        """Validar que en producción todas las configuraciones críticas estén presentes"""
+        if self.ENVIRONMENT != "development":
+            errors = []
+            
+            # Verificar configuraciones críticas en producción
+            if not self.WOOCOMMERCE_API_URL:
+                errors.append("WOOCOMMERCE_API_URL es requerido en producción")
+            if not self.WOOCOMMERCE_CONSUMER_KEY:
+                errors.append("WOOCOMMERCE_CONSUMER_KEY es requerido en producción")
+            if not self.WOOCOMMERCE_CONSUMER_SECRET:
+                errors.append("WOOCOMMERCE_CONSUMER_SECRET es requerido en producción")
+            if not self.POSTGRES_PASSWORD:
+                errors.append("POSTGRES_PASSWORD es requerido en producción")
+            if not self.OPENAI_API_KEY:
+                errors.append("OPENAI_API_KEY es requerido en producción")
+                
+            if errors:
+                raise ValueError(f"Errores de configuración en producción: {'; '.join(errors)}")
+        
+        return self
     
     @property
     def woocommerce_api_url(self) -> str:

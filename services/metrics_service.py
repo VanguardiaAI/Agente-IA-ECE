@@ -20,6 +20,7 @@ class MetricsService:
         self.database_url = database_url
         self.pool = None
         self.active_conversations = {}  # Cache de conversaciones activas
+        self.conversation_timeout_minutes = 30  # Timeout por defecto
         
     async def initialize(self):
         """Inicializar el pool de conexiones"""
@@ -38,6 +39,63 @@ class MetricsService:
         """Cerrar el pool de conexiones"""
         if self.pool:
             await self.pool.close()
+    
+    
+    async def find_or_create_conversation(
+        self,
+        user_id: str,
+        platform: str = "wordpress",
+        channel_details: Dict[str, Any] = None,
+        timeout_minutes: Optional[int] = None
+    ) -> str:
+        """Buscar conversación activa o crear una nueva si no existe o expiró"""
+        
+        if timeout_minutes is None:
+            timeout_minutes = self.conversation_timeout_minutes
+            
+        async with self.pool.acquire() as conn:
+            try:
+                # Buscar conversación activa
+                result = await conn.fetchrow("""
+                    SELECT conversation_id, started_at, messages_count, updated_at
+                    FROM conversations
+                    WHERE user_id = $1 
+                        AND platform = $2
+                        AND status = 'active'
+                        AND updated_at >= NOW() - INTERVAL '1 minute' * $3
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                """, user_id, platform, timeout_minutes)
+                
+                if result:
+                    conversation_id = result['conversation_id']
+                    logger.info(f"Conversación existente encontrada: {conversation_id} (mensajes: {result['messages_count']})")
+                    
+                    # Actualizar timestamp de última actividad
+                    await conn.execute("""
+                        UPDATE conversations 
+                        SET updated_at = NOW()
+                        WHERE conversation_id = $1
+                    """, conversation_id)
+                    
+                    # Actualizar cache
+                    if conversation_id not in self.active_conversations:
+                        self.active_conversations[conversation_id] = {
+                            'user_id': user_id,
+                            'platform': platform,
+                            'started_at': result['started_at'],
+                            'message_times': []
+                        }
+                    
+                    return conversation_id
+                else:
+                    # Crear nueva conversación
+                    return await self.start_conversation(user_id, platform, channel_details)
+                    
+            except Exception as e:
+                logger.error(f"Error en find_or_create_conversation: {e}")
+                # En caso de error, crear nueva conversación
+                return await self.start_conversation(user_id, platform, channel_details)
     
     async def start_conversation(
         self,
@@ -336,6 +394,12 @@ class MetricsService:
                     WHERE started_at >= NOW() - INTERVAL '30 days'
                 """)
                 
+                # Usuarios únicos históricos (todos los tiempos)
+                historical_users = await conn.fetchval("""
+                    SELECT COUNT(DISTINCT user_id) 
+                    FROM conversations
+                """)
+                
                 return {
                     'today': {
                         'conversations': int(today_stats['conversations_today'] or 0),
@@ -346,6 +410,9 @@ class MetricsService:
                     'total': {
                         'conversations': int(total_stats['total_conversations'] or 0),
                         'users': int(total_stats['total_users'] or 0)
+                    },
+                    'historical': {
+                        'unique_users': int(historical_users or 0)
                     },
                     'platforms': {
                         row['platform']: row['count'] 
@@ -494,6 +561,358 @@ class MetricsService:
             'tool_usage': [],
             'hourly_conversations': []
         }
+    
+    async def get_conversation_by_id(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+        """Obtener detalles de una conversación específica"""
+        async with self.pool.acquire() as conn:
+            try:
+                row = await conn.fetchrow("""
+                    SELECT 
+                        conversation_id,
+                        user_id,
+                        platform,
+                        started_at,
+                        ended_at,
+                        status,
+                        messages_count,
+                        user_messages_count,
+                        bot_messages_count,
+                        avg_response_time_ms,
+                        user_satisfaction,
+                        channel_details,
+                        metadata
+                    FROM conversations
+                    WHERE conversation_id = $1
+                """, conversation_id)
+                
+                if not row:
+                    return None
+                
+                return {
+                    'conversation_id': row['conversation_id'],
+                    'user_id': row['user_id'],
+                    'platform': row['platform'],
+                    'started_at': row['started_at'].isoformat() if row['started_at'] else None,
+                    'ended_at': row['ended_at'].isoformat() if row['ended_at'] else None,
+                    'duration_minutes': (
+                        (row['ended_at'] - row['started_at']).total_seconds() / 60
+                        if row['ended_at'] and row['started_at'] else None
+                    ),
+                    'status': row['status'],
+                    'messages_count': row['messages_count'],
+                    'user_messages': row['user_messages_count'],
+                    'bot_messages': row['bot_messages_count'],
+                    'avg_response_time_ms': float(row['avg_response_time_ms']) if row['avg_response_time_ms'] else None,
+                    'satisfaction': row['user_satisfaction'],
+                    'channel_details': json.loads(row['channel_details']) if row['channel_details'] else {},
+                    'metadata': json.loads(row['metadata']) if row['metadata'] else {}
+                }
+                
+            except Exception as e:
+                logger.error(f"Error obteniendo conversación {conversation_id}: {e}")
+                return None
+    
+    async def get_conversation_messages(self, conversation_id: str) -> List[Dict[str, Any]]:
+        """Obtener todos los mensajes de una conversación"""
+        async with self.pool.acquire() as conn:
+            try:
+                rows = await conn.fetch("""
+                    SELECT 
+                        message_id,
+                        sender_type,
+                        content,
+                        intent,
+                        entities,
+                        confidence,
+                        response_time_ms,
+                        tools_used,
+                        created_at
+                    FROM conversation_messages
+                    WHERE conversation_id = $1
+                    ORDER BY created_at ASC
+                """, conversation_id)
+                
+                return [
+                    {
+                        'message_id': row['message_id'],
+                        'sender_type': row['sender_type'],
+                        'content': row['content'],
+                        'intent': row['intent'],
+                        'entities': json.loads(row['entities']) if row['entities'] else [],
+                        'confidence': float(row['confidence']) if row['confidence'] else None,
+                        'response_time_ms': row['response_time_ms'],
+                        'tools_used': json.loads(row['tools_used']) if row['tools_used'] else [],
+                        'timestamp': row['created_at'].isoformat() if row['created_at'] else None
+                    }
+                    for row in rows
+                ]
+                
+            except Exception as e:
+                logger.error(f"Error obteniendo mensajes de conversación {conversation_id}: {e}")
+                return []
+    
+    async def search_conversations(
+        self,
+        query: Optional[str] = None,
+        user_id: Optional[str] = None,
+        platform: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """Buscar conversaciones con filtros avanzados"""
+        async with self.pool.acquire() as conn:
+            try:
+                # Construir query base
+                query_parts = []
+                params = []
+                param_count = 0
+                
+                # Query base para búsqueda
+                base_query = """
+                    FROM conversations c
+                    WHERE 1=1
+                """
+                
+                # Agregar filtros
+                if query:
+                    param_count += 1
+                    query_parts.append(f"""
+                        AND c.conversation_id IN (
+                            SELECT DISTINCT conversation_id 
+                            FROM conversation_messages 
+                            WHERE content ILIKE ${param_count}
+                        )
+                    """)
+                    params.append(f'%{query}%')
+                
+                if user_id:
+                    param_count += 1
+                    query_parts.append(f" AND c.user_id ILIKE ${param_count}")
+                    params.append(f'%{user_id}%')
+                
+                if platform:
+                    param_count += 1
+                    query_parts.append(f" AND c.platform = ${param_count}")
+                    params.append(platform)
+                
+                if date_from:
+                    param_count += 1
+                    query_parts.append(f" AND c.started_at >= ${param_count}")
+                    params.append(date_from)
+                
+                if date_to:
+                    param_count += 1
+                    query_parts.append(f" AND c.started_at <= ${param_count}")
+                    params.append(date_to)
+                
+                # Construir query completo
+                where_clause = base_query + ''.join(query_parts)
+                
+                # Contar total de resultados
+                count_query = f"SELECT COUNT(*) as total {where_clause}"
+                total_row = await conn.fetchrow(count_query, *params)
+                total = total_row['total'] if total_row else 0
+                
+                # Obtener conversaciones con paginación
+                param_count += 1
+                params.append(limit)
+                param_count += 1
+                params.append(offset)
+                
+                select_query = f"""
+                    SELECT 
+                        c.conversation_id,
+                        c.user_id,
+                        c.platform,
+                        c.started_at,
+                        c.ended_at,
+                        c.status,
+                        c.messages_count,
+                        c.user_messages_count,
+                        c.bot_messages_count,
+                        c.avg_response_time_ms,
+                        c.user_satisfaction,
+                        c.channel_details
+                    {where_clause}
+                    ORDER BY c.started_at DESC
+                    LIMIT ${param_count-1} OFFSET ${param_count}
+                """
+                
+                rows = await conn.fetch(select_query, *params)
+                
+                conversations = [
+                    {
+                        'conversation_id': row['conversation_id'],
+                        'user_id': row['user_id'],
+                        'platform': row['platform'],
+                        'started_at': row['started_at'].isoformat() if row['started_at'] else None,
+                        'ended_at': row['ended_at'].isoformat() if row['ended_at'] else None,
+                        'duration_minutes': (
+                            (row['ended_at'] - row['started_at']).total_seconds() / 60
+                            if row['ended_at'] and row['started_at'] else None
+                        ),
+                        'status': row['status'],
+                        'messages_count': row['messages_count'],
+                        'user_messages': row['user_messages_count'],
+                        'bot_messages': row['bot_messages_count'],
+                        'avg_response_time_ms': float(row['avg_response_time_ms']) if row['avg_response_time_ms'] else None,
+                        'satisfaction': row['user_satisfaction'],
+                        'channel_details': json.loads(row['channel_details']) if row['channel_details'] else {}
+                    }
+                    for row in rows
+                ]
+                
+                return {
+                    'conversations': conversations,
+                    'total': total
+                }
+                
+            except Exception as e:
+                logger.error(f"Error buscando conversaciones: {e}")
+                return {'conversations': [], 'total': 0}
+    
+    async def export_conversations(
+        self,
+        conversation_ids: Optional[List[str]] = None,
+        format: str = "json",
+        include_messages: bool = True
+    ) -> Dict[str, Any]:
+        """Exportar conversaciones en formato JSON o CSV"""
+        async with self.pool.acquire() as conn:
+            try:
+                # Construir query para obtener conversaciones
+                if conversation_ids:
+                    query = """
+                        SELECT * FROM conversations 
+                        WHERE conversation_id = ANY($1)
+                        ORDER BY started_at DESC
+                    """
+                    conversations = await conn.fetch(query, conversation_ids)
+                else:
+                    query = """
+                        SELECT * FROM conversations 
+                        ORDER BY started_at DESC 
+                        LIMIT 1000
+                    """
+                    conversations = await conn.fetch(query)
+                
+                result = []
+                for conv in conversations:
+                    conv_data = {
+                        'conversation_id': conv['conversation_id'],
+                        'user_id': conv['user_id'],
+                        'platform': conv['platform'],
+                        'started_at': conv['started_at'].isoformat() if conv['started_at'] else None,
+                        'ended_at': conv['ended_at'].isoformat() if conv['ended_at'] else None,
+                        'status': conv['status'],
+                        'messages_count': conv['messages_count'],
+                        'user_messages_count': conv['user_messages_count'],
+                        'bot_messages_count': conv['bot_messages_count'],
+                        'avg_response_time_ms': float(conv['avg_response_time_ms']) if conv['avg_response_time_ms'] else None,
+                        'user_satisfaction': conv['user_satisfaction']
+                    }
+                    
+                    if include_messages:
+                        messages = await self.get_conversation_messages(conv['conversation_id'])
+                        conv_data['messages'] = messages
+                    
+                    result.append(conv_data)
+                
+                if format == "csv":
+                    # Convertir a formato CSV
+                    import csv
+                    import io
+                    
+                    output = io.StringIO()
+                    if result:
+                        # Crear encabezados basados en las claves del primer elemento
+                        fieldnames = list(result[0].keys())
+                        if 'messages' in fieldnames:
+                            fieldnames.remove('messages')  # CSV no maneja bien arrays anidados
+                        
+                        writer = csv.DictWriter(output, fieldnames=fieldnames)
+                        writer.writeheader()
+                        
+                        for row in result:
+                            csv_row = {k: v for k, v in row.items() if k != 'messages'}
+                            writer.writerow(csv_row)
+                    
+                    return {
+                        'format': 'csv',
+                        'data': output.getvalue(),
+                        'count': len(result)
+                    }
+                else:
+                    return {
+                        'format': 'json',
+                        'data': result,
+                        'count': len(result)
+                    }
+                    
+            except Exception as e:
+                logger.error(f"Error exportando conversaciones: {e}")
+                return {'format': format, 'data': None, 'count': 0, 'error': str(e)}
+    
+    async def get_conversation_analytics(self, conversation_id: str) -> Dict[str, Any]:
+        """Obtener análisis detallado de una conversación"""
+        async with self.pool.acquire() as conn:
+            try:
+                # Obtener datos de la conversación
+                conv = await self.get_conversation_by_id(conversation_id)
+                if not conv:
+                    return None
+                
+                # Obtener análisis de mensajes
+                messages = await self.get_conversation_messages(conversation_id)
+                
+                # Calcular métricas adicionales
+                intents = {}
+                tools_used = {}
+                response_times = []
+                
+                for msg in messages:
+                    if msg['intent']:
+                        intents[msg['intent']] = intents.get(msg['intent'], 0) + 1
+                    
+                    if msg['tools_used']:
+                        for tool in msg['tools_used']:
+                            tools_used[tool] = tools_used.get(tool, 0) + 1
+                    
+                    if msg['response_time_ms']:
+                        response_times.append(msg['response_time_ms'])
+                
+                # Calcular estadísticas de tiempo de respuesta
+                avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+                max_response_time = max(response_times) if response_times else 0
+                min_response_time = min(response_times) if response_times else 0
+                
+                return {
+                    'conversation': conv,
+                    'analytics': {
+                        'intents_distribution': intents,
+                        'tools_usage': tools_used,
+                        'response_time_stats': {
+                            'average': avg_response_time,
+                            'max': max_response_time,
+                            'min': min_response_time
+                        },
+                        'message_flow': [
+                            {
+                                'timestamp': msg['timestamp'],
+                                'sender': msg['sender_type'],
+                                'intent': msg['intent'],
+                                'response_time': msg['response_time_ms']
+                            }
+                            for msg in messages
+                        ]
+                    }
+                }
+                
+            except Exception as e:
+                logger.error(f"Error obteniendo análisis de conversación {conversation_id}: {e}")
+                return None
     
     async def start_cleanup_scheduler(self):
         """Iniciar el scheduler para limpieza automática"""

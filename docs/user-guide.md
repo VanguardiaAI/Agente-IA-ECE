@@ -268,13 +268,13 @@ Para ver información de pedidos, Eva solicita:
 #### Configuración
 - **Tiempo de Espera**: 20 minutos por defecto
 - **Mensaje**: Un solo mensaje personalizado con productos
-- **Descuento**: Código "EXPRESS" (fijo)
+- **Descuento**: Código "DESCUENTOEXPRESS" (fijo)
 - **Frecuencia**: Un mensaje por carrito abandonado
 
 #### Proceso Automático
 1. Cliente abandona carrito
 2. Eva espera el tiempo configurado (20 min por defecto)
-3. Envía UN mensaje por WhatsApp con código EXPRESS
+3. Envía UN mensaje por WhatsApp con código DESCUENTOEXPRESS
 4. Incluye lista de productos y enlace al carrito
 5. No se envían mensajes adicionales
 
@@ -284,7 +284,7 @@ En "WooCommerce Cart Abandonment Recovery" puedes ajustar:
 - **URL del webhook**: Para conectar con Eva
 - **Otras opciones**: Configuraciones adicionales disponibles
 
-**Nota**: El código de descuento "EXPRESS" es fijo y no se puede modificar.
+**Nota**: El código de descuento "DESCUENTOEXPRESS" es fijo y no se puede modificar.
 
 ---
 

@@ -39,24 +39,58 @@ pip install -r requirements.txt
 
 ### 3. Configurar variables de entorno
 
+#### Opción A: Desarrollo Local (Recomendado para empezar)
+
 ```bash
+# Usar configuración de desarrollo con valores por defecto
+cp .env.development .env
 cp env.agent.example env.agent
 ```
 
-Edita `env.agent` con tus credenciales:
+Esta configuración permite ejecutar el sistema sin necesidad de credenciales reales.
+
+#### Opción B: Desarrollo con Servicios Reales
 
 ```bash
-# Configuración de OpenAI
-OPENAI_API_KEY=tu_api_key_aqui
-MODEL_NAME=gpt-4.1
+cp .env.example .env
+cp env.agent.example env.agent
+```
 
-# Configuración de WooCommerce
+Edita `.env` y `env.agent` con tus credenciales:
+
+```bash
+# .env
+ENVIRONMENT=development  # Importante para modo desarrollo
 WOOCOMMERCE_API_URL=https://tu-tienda.com/wp-json/wc/v3
 WOOCOMMERCE_CONSUMER_KEY=tu_consumer_key
 WOOCOMMERCE_CONSUMER_SECRET=tu_consumer_secret
+POSTGRES_PASSWORD=tu_password_local
+OPENAI_API_KEY=tu_api_key_real
 
-# Base de datos PostgreSQL
+# env.agent
+MODEL_NAME=gpt-5
+OPENAI_API_KEY=tu_api_key_real
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/knowledge_base
+```
+
+#### Opción C: Producción
+
+```bash
+cp env.production.example .env
+cp env.agent.example env.agent
+```
+
+En producción, TODAS las variables de entorno son obligatorias:
+
+```bash
+# .env
+ENVIRONMENT=production  # Activa validaciones estrictas
+WOOCOMMERCE_API_URL=https://tu-tienda.com/wp-json/wc/v3
+WOOCOMMERCE_CONSUMER_KEY=tu_consumer_key
+WOOCOMMERCE_CONSUMER_SECRET=tu_consumer_secret
+POSTGRES_PASSWORD=password_seguro
+OPENAI_API_KEY=tu_api_key
+# ... todas las demás variables requeridas
 ```
 
 ### 4. Configurar la base de datos
@@ -77,21 +111,49 @@ python scripts/init_database.py
 
 ## 🚀 Uso
 
-### Iniciar el servidor MCP de WooCommerce
+### Verificar configuración (Recomendado)
 
 ```bash
-python -m mcp_woocommerce_server
+python scripts/check_config.py
 ```
 
-### Iniciar el agente de atención al cliente
+Este script verificará:
+- Archivos de configuración existentes
+- Variables de entorno configuradas
+- Modo de ejecución (desarrollo/producción)
+- Dependencias instaladas
+
+### Iniciar servicios (Opción 1: Modo Seguro - Recomendado)
 
 ```bash
+python start_services_safe.py
+```
+
+Este script:
+- Verifica la configuración antes de iniciar
+- Inicia PostgreSQL si es necesario
+- Ejecuta los servicios con manejo de errores
+
+### Iniciar servicios (Opción 2: Modo Normal)
+
+```bash
+python start_services.py
+```
+
+### Iniciar servicios individualmente
+
+```bash
+# Terminal 1: Servidor MCP
+python main.py
+
+# Terminal 2: Interfaz Web
 python app.py
 ```
 
 ### Acceder a la interfaz web
 
-Abre tu navegador en `http://localhost:8000`
+- Chat público: `http://localhost:8080`
+- Panel de administración: `http://localhost:8080/admin`
 
 ## 📁 Estructura del Proyecto
 

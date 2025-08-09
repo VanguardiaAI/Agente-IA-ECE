@@ -65,7 +65,7 @@ class CustomerServiceMultiAgent:
     
     def __init__(self):
         self.llm_provider = os.getenv("LLM_PROVIDER", "openai")
-        self.model_name = os.getenv("MODEL_NAME", "gpt-4.1")
+        self.model_name = os.getenv("MODEL_NAME", "gpt-5")
         self.temperature = float(os.getenv("TEMPERATURE", "0.1"))
         self.max_tokens = int(os.getenv("MAX_TOKENS", "4000"))
         self.mcp_server_host = os.getenv("MCP_SERVER_HOST", "localhost")
@@ -94,9 +94,9 @@ class CustomerServiceMultiAgent:
         )
     
     def _initialize_cheap_llm(self):
-        """Inicializa un LLM más barato para tareas simples - usa gpt-4.1-mini para economía"""
+        """Inicializa un LLM más barato para tareas simples - usa gpt-5-mini para economía"""
         return ChatOpenAI(
-            model="gpt-4.1-mini",
+            model="gpt-5-mini",
             temperature=0.1,
             max_tokens=1000
         )

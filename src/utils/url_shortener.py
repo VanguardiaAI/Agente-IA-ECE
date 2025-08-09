@@ -30,7 +30,7 @@ def shorten_url(url: str, base_domain: str = None) -> str:
     
     try:
         # Extraer el slug del producto de la URL
-        # Ejemplo: https://staging.elcorteelectrico.com/producto/ventilador-techo-htb-3000/
+        # Ejemplo: https://elcorteelectrico.com/producto/ventilador-techo-htb-3000/
         match = re.search(r'/producto/([^/]+)/?', url)
         if match:
             slug = match.group(1)

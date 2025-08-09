@@ -694,14 +694,15 @@ async def chat_endpoint(chat_message: ChatMessage, request: Request):
         start_time = datetime.now()
         
         if metrics_service:
-            conversation_id = await metrics_service.start_conversation(
+            conversation_id = await metrics_service.find_or_create_conversation(
                 user_id=chat_message.user_id,
                 platform=chat_message.platform,
                 channel_details={
                     "source": "api",
                     "user_agent": request.headers.get("user-agent", ""),
                     "ip": request.client.host if request.client else None
-                }
+                },
+                timeout_minutes=30  # Conversations timeout after 30 minutes of inactivity
             )
             
             # Registrar mensaje del usuario
@@ -791,7 +792,7 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
             message_data = json.loads(data)
             
             user_message = message_data.get("message", "")
-            platform = message_data.get("platform", "whatsapp")
+            platform = message_data.get("platform", "wordpress")
             
             if not user_message:
                 continue
@@ -799,11 +800,45 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
             # Procesar con el agente híbrido
             if hybrid_agent:
                 try:
+                    # Iniciar tracking de conversación si hay servicio de métricas
+                    conversation_id = None
+                    start_time = datetime.now()
+                    
+                    if metrics_service:
+                        conversation_id = await metrics_service.find_or_create_conversation(
+                            user_id=client_id,
+                            platform=platform,
+                            channel_details={
+                                "source": "websocket",
+                                "client_id": client_id,
+                                "connection_type": "websocket"
+                            },
+                            timeout_minutes=30  # Conversations timeout after 30 minutes of inactivity
+                        )
+                        
+                        # Registrar mensaje del usuario
+                        await metrics_service.track_message(
+                            conversation_id=conversation_id,
+                            sender_type="user",
+                            content=user_message
+                        )
+                    
                     response = await hybrid_agent.process_message(
                         message=user_message,
                         user_id=client_id,
                         platform=platform
                     )
+                    
+                    # Registrar respuesta del bot si hay métricas
+                    if metrics_service and conversation_id:
+                        response_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+                        
+                        await metrics_service.track_message(
+                            conversation_id=conversation_id,
+                            sender_type="bot",
+                            content=response,
+                            response_time_ms=response_time_ms
+                        )
                     
                     # Enviar respuesta
                     response_data = {
@@ -946,6 +981,151 @@ async def get_metrics_summary():
         logger.error(f"Error obteniendo métricas: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/admin/conversations/{conversation_id}/messages")
+async def get_conversation_messages(conversation_id: str):
+    """Obtener todos los mensajes de una conversación específica"""
+    try:
+        if not metrics_service:
+            raise HTTPException(status_code=503, detail="Servicio de métricas no disponible")
+        
+        # Obtener detalles de la conversación
+        conversation_details = await metrics_service.get_conversation_by_id(conversation_id)
+        if not conversation_details:
+            raise HTTPException(status_code=404, detail="Conversación no encontrada")
+        
+        # Obtener mensajes de la conversación
+        messages = await metrics_service.get_conversation_messages(conversation_id)
+        
+        return {
+            "conversation": conversation_details,
+            "messages": messages,
+            "total_messages": len(messages),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo mensajes de conversación: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/conversations/search")
+async def search_conversations(
+    query: Optional[str] = None,
+    user_id: Optional[str] = None,
+    platform: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """Buscar conversaciones con filtros avanzados"""
+    try:
+        if not metrics_service:
+            raise HTTPException(status_code=503, detail="Servicio de métricas no disponible")
+        
+        # Convertir fechas si se proporcionan
+        date_from_dt = datetime.fromisoformat(date_from) if date_from else None
+        date_to_dt = datetime.fromisoformat(date_to) if date_to else None
+        
+        # Buscar conversaciones
+        results = await metrics_service.search_conversations(
+            query=query,
+            user_id=user_id,
+            platform=platform,
+            date_from=date_from_dt,
+            date_to=date_to_dt,
+            limit=limit,
+            offset=offset
+        )
+        
+        return {
+            "conversations": results['conversations'],
+            "total": results['total'],
+            "limit": limit,
+            "offset": offset,
+            "filters": {
+                "query": query,
+                "user_id": user_id,
+                "platform": platform,
+                "date_from": date_from,
+                "date_to": date_to
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error buscando conversaciones: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/conversations/{conversation_id}/analytics")
+async def get_conversation_analytics(conversation_id: str):
+    """Obtener análisis detallado de una conversación"""
+    try:
+        if not metrics_service:
+            raise HTTPException(status_code=503, detail="Servicio de métricas no disponible")
+        
+        analytics = await metrics_service.get_conversation_analytics(conversation_id)
+        if not analytics:
+            raise HTTPException(status_code=404, detail="Conversación no encontrada")
+        
+        return {
+            "analytics": analytics,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo análisis de conversación: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/conversations/export")
+async def export_conversations(
+    format: str = "json",
+    include_messages: bool = True,
+    conversation_ids: Optional[list] = None
+):
+    """Exportar conversaciones en formato JSON o CSV"""
+    try:
+        if not metrics_service:
+            raise HTTPException(status_code=503, detail="Servicio de métricas no disponible")
+        
+        if format not in ["json", "csv"]:
+            raise HTTPException(status_code=400, detail="Formato debe ser 'json' o 'csv'")
+        
+        result = await metrics_service.export_conversations(
+            conversation_ids=conversation_ids,
+            format=format,
+            include_messages=include_messages
+        )
+        
+        if result.get('error'):
+            raise HTTPException(status_code=500, detail=result['error'])
+        
+        if format == "csv":
+            from fastapi.responses import Response
+            return Response(
+                content=result['data'],
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": f"attachment; filename=conversations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                }
+            )
+        else:
+            return JSONResponse(
+                content=result['data'],
+                headers={
+                    "Content-Disposition": f"attachment; filename=conversations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                }
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exportando conversaciones: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Funciones auxiliares
 async def _background_sync_all_products(force_update: bool = False):
     """Sincronizar todos los productos en segundo plano"""
@@ -996,7 +1176,7 @@ async def _process_cart_abandoned(webhook_data: Dict[str, Any]):
             return
         
         # Usar código de descuento fijo EXPRESS (ya existe en WooCommerce)
-        discount_code = "EXPRESS"
+        discount_code = "DESCUENTOEXPRESS"
         logger.info(f"📌 Usando cupón existente: {discount_code}")
         
         # Función auxiliar para limpiar valores monetarios

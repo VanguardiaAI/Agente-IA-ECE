@@ -21,7 +21,7 @@ Esta guía describe cómo Eva formatea las respuestas para WhatsApp, optimizando
 💰 ~266.2€~ *206.31€* ¡OFERTA!
 ✅ Disponible
 📋 Ref: 90920070
-🔗 Ver producto: https://staging.elcorteelectrico.com/producto/gabarron-v25-dc/
+🔗 Ver producto: https://elcorteelectrico.com/producto/gabarron-v25-dc/
 ```
 
 ## Componentes del Formato

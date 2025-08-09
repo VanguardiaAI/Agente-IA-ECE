@@ -570,18 +570,85 @@ Información clara y directa.
 
         <!-- Conversations Section -->
         <section id="conversations" class="guide-section">
-            <h2>💬 Información de Conversaciones</h2>
+            <h2>💬 Gestión de Conversaciones</h2>
             
-            <h3>Datos Disponibles</h3>
-            <p>El sistema registra información básica sobre las conversaciones:</p>
+            <h3>Panel de Conversaciones</h3>
+            <p>Accede al historial completo de conversaciones con tus clientes desde el menú "Conversaciones".</p>
             
             <div class="feature-card">
-                <h5>Información Registrada</h5>
+                <h5>📊 Funcionalidades Disponibles</h5>
                 <ul>
-                    <li><strong>ID de Usuario:</strong> Identificador único del cliente</li>
-                    <li><strong>Plataforma:</strong> WordPress o WhatsApp</li>
-                    <li><strong>Fecha y Hora:</strong> Cuándo ocurrió la conversación</li>
-                    <li><strong>Cantidad de Mensajes:</strong> Total de intercambios</li>
+                    <li><strong>Lista de conversaciones:</strong> Vista completa con información resumida</li>
+                    <li><strong>Búsqueda avanzada:</strong> Por contenido, usuario, fecha o plataforma</li>
+                    <li><strong>Visualización detallada:</strong> Lee conversaciones completas con todos los mensajes</li>
+                    <li><strong>Exportación:</strong> Descarga conversaciones en CSV o JSON</li>
+                    <li><strong>Filtros:</strong> Por plataforma (WhatsApp/WordPress), fecha, usuario</li>
+                </ul>
+            </div>
+
+            <h3>Información de Cada Conversación</h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>📋 Datos Básicos</h5>
+                        <ul>
+                            <li>ID único de conversación</li>
+                            <li>Usuario/Cliente</li>
+                            <li>Plataforma de origen</li>
+                            <li>Fecha y hora de inicio</li>
+                            <li>Duración total</li>
+                            <li>Estado (activa/finalizada)</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>💬 Detalles del Chat</h5>
+                        <ul>
+                            <li>Todos los mensajes intercambiados</li>
+                            <li>Tiempos de respuesta</li>
+                            <li>Intenciones detectadas</li>
+                            <li>Herramientas utilizadas</li>
+                            <li>Metadata adicional</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Cómo Buscar Conversaciones</h3>
+            <ol>
+                <li>Ve a "Conversaciones" en el menú lateral</li>
+                <li>Usa los filtros disponibles:
+                    <ul>
+                        <li><strong>Búsqueda por texto:</strong> Encuentra conversaciones que contengan palabras específicas</li>
+                        <li><strong>Por usuario:</strong> Busca por ID de usuario</li>
+                        <li><strong>Por plataforma:</strong> Filtra por WhatsApp o WordPress</li>
+                        <li><strong>Por fecha:</strong> Selecciona un rango de fechas</li>
+                    </ul>
+                </li>
+                <li>Haz clic en "Ver" para leer la conversación completa</li>
+            </ol>
+
+            <h3>Visualización de Mensajes</h3>
+            <div class="feature-card">
+                <h5>🔍 Vista de Conversación</h5>
+                <p>Los mensajes se muestran en formato de chat con:</p>
+                <ul>
+                    <li>Mensajes del usuario a la derecha (fondo negro)</li>
+                    <li>Respuestas de Eva a la izquierda (fondo gris)</li>
+                    <li>Hora exacta de cada mensaje</li>
+                    <li>Intenciones detectadas por Eva</li>
+                    <li>Herramientas MCP utilizadas</li>
+                </ul>
+            </div>
+
+            <h3>Exportación de Datos</h3>
+            <div class="tip-box">
+                <strong>📥 Opciones de Exportación:</strong>
+                <ul>
+                    <li><strong>Lista de conversaciones:</strong> Exporta como CSV con datos resumidos</li>
+                    <li><strong>Conversación individual:</strong> Descarga como JSON con todos los detalles</li>
+                    <li><strong>Uso:</strong> Para análisis, reportes o respaldo de información</li>
                 </ul>
             </div>
 
@@ -593,8 +660,13 @@ Información clara y directa.
                 <p>En la configuración puedes definir palabras como "hablar con persona", "agente humano", "queja" que harán que Eva ofrezca contactar con tu equipo.</p>
             </div>
 
-            <div class="warning-box">
-                <strong>⚠️ Nota Importante:</strong> El sistema no incluye un monitor de conversaciones en tiempo real. La información se registra para estadísticas básicas únicamente.
+            <div class="success-box">
+                <strong>✅ Política de Retención:</strong>
+                <ul>
+                    <li>Las conversaciones se almacenan durante 30 días</li>
+                    <li>Los mensajes detallados se mantienen por 7 días</li>
+                    <li>Las métricas agregadas se conservan permanentemente</li>
+                </ul>
             </div>
         </section>
 
@@ -703,7 +775,7 @@ Información clara y directa.
                 <ul>
                     <li><strong>Tiempo de Espera:</strong> 20 minutos por defecto</li>
                     <li><strong>Mensaje:</strong> Un solo mensaje personalizado con productos</li>
-                    <li><strong>Descuento:</strong> Código "EXPRESS" (fijo)</li>
+                    <li><strong>Descuento:</strong> Código "DESCUENTOEXPRESS" (fijo)</li>
                     <li><strong>Frecuencia:</strong> Un mensaje por carrito abandonado</li>
                 </ul>
             </div>
@@ -713,7 +785,7 @@ Información clara y directa.
                 <ol>
                     <li>Cliente abandona carrito</li>
                     <li>Eva espera el tiempo configurado (20 min por defecto)</li>
-                    <li>Envía UN mensaje por WhatsApp con código EXPRESS</li>
+                    <li>Envía UN mensaje por WhatsApp con código DESCUENTOEXPRESS</li>
                     <li>Incluye lista de productos y enlace al carrito</li>
                     <li>No se envían mensajes adicionales</li>
                 </ol>
@@ -727,7 +799,7 @@ Información clara y directa.
                     <li><strong>URL del webhook:</strong> Para conectar con Eva</li>
                     <li><strong>Otras opciones:</strong> Configuraciones adicionales disponibles</li>
                 </ul>
-                <p><strong>Nota:</strong> El código de descuento "EXPRESS" es fijo y no se puede modificar.</p>
+                <p><strong>Nota:</strong> El código de descuento "DESCUENTOEXPRESS" es fijo y no se puede modificar.</p>
             </div>
         </section>
 

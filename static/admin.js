@@ -46,6 +46,27 @@ function loadUserInfo() {
 
 // Initialize event listeners
 function initializeEventListeners() {
+    // Auto close sidebar on window resize
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 993) {
+            closeSidebar();
+        }
+    });
+    
+    // Close sidebar when clicking on main content (mobile)
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth < 993) {
+            const sidebar = document.getElementById('sidebar');
+            const hamburgerBtn = e.target.closest('.btn');
+            
+            if (sidebar.classList.contains('show') && 
+                !sidebar.contains(e.target) && 
+                !hamburgerBtn?.onclick?.toString().includes('toggleSidebar')) {
+                closeSidebar();
+            }
+        }
+    });
+    
     // Menu navigation
     document.querySelectorAll('.menu-item').forEach(item => {
         item.addEventListener('click', (e) => {
@@ -56,6 +77,11 @@ function initializeEventListeners() {
             // Update active menu
             document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
             item.classList.add('active');
+            
+            // Close sidebar on mobile after navigation
+            if (window.innerWidth < 993) {
+                closeSidebar();
+            }
         });
     });
     
@@ -82,6 +108,9 @@ function showSection(section) {
             case 'dashboard':
                 loadDashboard();
                 break;
+            case 'conversations':
+                loadConversations();
+                break;
             case 'knowledge':
                 loadKnowledgeDocuments();
                 break;
@@ -102,13 +131,19 @@ async function loadDashboard() {
         // Update dashboard stats with real metrics
         if (metrics.today) {
             document.getElementById('statConversations').textContent = metrics.today.conversations || 0;
-            document.getElementById('statUsers').textContent = metrics.today.unique_users || 0;
+        }
+        
+        // Usuarios únicos siempre debe mostrar el total histórico
+        if (metrics.historical) {
+            document.getElementById('statUsers').textContent = metrics.historical.unique_users || 0;
+        } else if (metrics.total) {
+            // Fallback si no hay histórico disponible
+            document.getElementById('statUsers').textContent = metrics.total.users || 0;
         }
         
         // Si no hay conversaciones hoy pero hay totales, usar esos
         if (metrics.total && metrics.total.conversations > 0 && (!metrics.today || metrics.today.conversations === 0)) {
             document.getElementById('statConversations').textContent = metrics.total.conversations || 0;
-            document.getElementById('statUsers').textContent = metrics.total.users || 0;
         }
         
         // Mostrar total de conversaciones de los últimos 30 días
@@ -484,7 +519,25 @@ function formatBytes(bytes) {
 }
 
 function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('active');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    if (sidebar.classList.contains('show')) {
+        closeSidebar();
+    } else {
+        sidebar.classList.add('show');
+        overlay.classList.add('show');
+        document.body.style.overflow = 'hidden'; // Prevent background scroll
+    }
+}
+
+function closeSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    sidebar.classList.remove('show');
+    overlay.classList.remove('show');
+    document.body.style.overflow = ''; // Restore background scroll
 }
 
 async function logout() {
@@ -619,4 +672,295 @@ async function checkSystemStatus() {
         statusLed.className = 'status-led inactive';
         statusText.textContent = 'Sin Conexión';
     }
+}
+
+// Conversation Management Functions
+let conversationsData = [];
+let currentConversationPage = 1;
+const conversationsPerPage = 20;
+let currentConversationId = null;
+
+// Load conversations
+async function loadConversations(page = 1) {
+    try {
+        const offset = (page - 1) * conversationsPerPage;
+        const response = await fetchAPI(`/api/admin/conversations?limit=${conversationsPerPage}&offset=${offset}`);
+        
+        if (response && response.conversations) {
+            conversationsData = response.conversations;
+            displayConversations(conversationsData);
+            
+            // Update pagination
+            document.getElementById('currentPage').textContent = page;
+            document.getElementById('conversationsPagination').style.display = 
+                response.total > conversationsPerPage ? 'block' : 'none';
+        }
+    } catch (error) {
+        console.error('Error loading conversations:', error);
+        document.getElementById('conversationsList').innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-danger">
+                    Error cargando conversaciones
+                </td>
+            </tr>
+        `;
+    }
+}
+
+// Display conversations in table
+function displayConversations(conversations) {
+    const tbody = document.getElementById('conversationsList');
+    
+    if (!conversations || conversations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay conversaciones disponibles</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = conversations.map(conv => {
+        const date = new Date(conv.started_at);
+        const platformIcon = conv.platform === 'whatsapp' ? '📱' : '🌐';
+        const duration = conv.duration_minutes ? `${conv.duration_minutes.toFixed(1)} min` : 'En curso';
+        const statusBadge = conv.status === 'active' 
+            ? '<span class="badge bg-success">Activa</span>' 
+            : '<span class="badge bg-secondary">Finalizada</span>';
+        
+        return `
+            <tr>
+                <td>${date.toLocaleString('es-ES')}</td>
+                <td>${conv.user_id.substring(0, 20)}...</td>
+                <td>${platformIcon} ${conv.platform}</td>
+                <td>${conv.messages_count || 0}</td>
+                <td>${duration}</td>
+                <td>${statusBadge}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="viewConversation('${conv.conversation_id}')">
+                        <i class="bi bi-eye"></i> Ver
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Search conversations
+async function searchConversations() {
+    try {
+        const searchData = {
+            query: document.getElementById('searchQuery').value,
+            user_id: document.getElementById('filterUserId').value,
+            platform: document.getElementById('filterPlatform').value,
+            date_from: document.getElementById('filterDateFrom').value,
+            date_to: document.getElementById('filterDateTo').value
+        };
+        
+        // Build query string
+        const params = new URLSearchParams();
+        Object.keys(searchData).forEach(key => {
+            if (searchData[key]) params.append(key, searchData[key]);
+        });
+        
+        const response = await fetchAPI(`/api/admin/conversations/search?${params.toString()}`);
+        
+        if (response && response.conversations) {
+            conversationsData = response.conversations;
+            displayConversations(conversationsData);
+            document.getElementById('conversationsPagination').style.display = 'none'; // Hide pagination for search results
+        }
+    } catch (error) {
+        console.error('Error searching conversations:', error);
+        showAlert('Error al buscar conversaciones', 'error');
+    }
+}
+
+// Clear conversation filters
+function clearConversationFilters() {
+    document.getElementById('searchQuery').value = '';
+    document.getElementById('filterUserId').value = '';
+    document.getElementById('filterPlatform').value = '';
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    
+    // Reload conversations
+    loadConversations(1);
+}
+
+// View conversation details
+async function viewConversation(conversationId) {
+    try {
+        currentConversationId = conversationId;
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('conversationModal'));
+        modal.show();
+        
+        // Load conversation details
+        const response = await fetchAPI(`/api/admin/conversations/${conversationId}/messages`);
+        
+        if (response) {
+            // Update conversation details
+            const conv = response.conversation;
+            document.getElementById('convDetailId').textContent = conv.conversation_id;
+            document.getElementById('convDetailUser').textContent = conv.user_id;
+            document.getElementById('convDetailPlatform').textContent = conv.platform;
+            document.getElementById('convDetailDuration').textContent = 
+                conv.duration_minutes ? `${conv.duration_minutes.toFixed(1)} minutos` : 'En curso';
+            
+            // Display messages
+            displayConversationMessages(response.messages);
+        }
+    } catch (error) {
+        console.error('Error loading conversation details:', error);
+        showAlert('Error al cargar los detalles de la conversación', 'error');
+    }
+}
+
+// Display conversation messages
+function displayConversationMessages(messages) {
+    const container = document.getElementById('conversationMessages');
+    
+    if (!messages || messages.length === 0) {
+        container.innerHTML = '<p class="text-center text-muted">No hay mensajes en esta conversación</p>';
+        return;
+    }
+    
+    let lastDate = null;
+    container.innerHTML = messages.map(msg => {
+        const messageDate = new Date(msg.timestamp);
+        const dateStr = messageDate.toLocaleDateString('es-ES');
+        let dateSeparator = '';
+        
+        // Add date separator if date changes
+        if (dateStr !== lastDate) {
+            lastDate = dateStr;
+            dateSeparator = `
+                <div class="conversation-date-separator">
+                    <span>${dateStr}</span>
+                </div>
+            `;
+        }
+        
+        const isUser = msg.sender_type === 'user';
+        const messageClass = isUser ? 'message-user' : 'message-bot';
+        const alignClass = isUser ? 'text-end' : 'text-start';
+        
+        let metadata = '';
+        if (!isUser && (msg.intent || msg.tools_used?.length > 0)) {
+            metadata = '<div class="message-metadata">';
+            if (msg.intent) {
+                metadata += `<span class="message-intent">Intent: ${msg.intent}</span>`;
+            }
+            if (msg.tools_used?.length > 0) {
+                metadata += `<span class="message-intent">Tools: ${msg.tools_used.join(', ')}</span>`;
+            }
+            metadata += '</div>';
+        }
+        
+        return `
+            ${dateSeparator}
+            <div class="d-flex ${isUser ? 'justify-content-end' : 'justify-content-start'} mb-3">
+                <div class="message-bubble ${messageClass}">
+                    <div>${msg.content}</div>
+                    <div class="message-time ${alignClass}">
+                        ${messageDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    ${metadata}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Export conversations
+async function exportConversations() {
+    try {
+        const data = conversationsData.map(conv => ({
+            fecha: new Date(conv.started_at).toLocaleString('es-ES'),
+            usuario: conv.user_id,
+            plataforma: conv.platform,
+            mensajes: conv.messages_count,
+            duracion_minutos: conv.duration_minutes,
+            estado: conv.status
+        }));
+        
+        const csv = convertToCSV(data);
+        downloadCSV(csv, `conversaciones_${new Date().toISOString().split('T')[0]}.csv`);
+        
+        showAlert('Conversaciones exportadas correctamente', 'success');
+    } catch (error) {
+        console.error('Error exporting conversations:', error);
+        showAlert('Error al exportar conversaciones', 'error');
+    }
+}
+
+// Export single conversation
+async function exportConversation() {
+    if (!currentConversationId) return;
+    
+    try {
+        const response = await fetchAPI(`/api/admin/conversations/${currentConversationId}/messages`);
+        
+        if (response) {
+            const data = {
+                conversacion: response.conversation,
+                mensajes: response.messages
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `conversacion_${currentConversationId}_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showAlert('Conversación exportada correctamente', 'success');
+        }
+    } catch (error) {
+        console.error('Error exporting conversation:', error);
+        showAlert('Error al exportar la conversación', 'error');
+    }
+}
+
+// Pagination functions
+function previousConversationsPage() {
+    if (currentConversationPage > 1) {
+        currentConversationPage--;
+        loadConversations(currentConversationPage);
+    }
+}
+
+function nextConversationsPage() {
+    currentConversationPage++;
+    loadConversations(currentConversationPage);
+}
+
+// Helper functions
+function convertToCSV(data) {
+    if (data.length === 0) return '';
+    
+    const headers = Object.keys(data[0]);
+    const csvHeaders = headers.join(',');
+    
+    const csvRows = data.map(row => 
+        headers.map(header => {
+            const value = row[header];
+            return typeof value === 'string' && value.includes(',') 
+                ? `"${value}"` 
+                : value;
+        }).join(',')
+    );
+    
+    return [csvHeaders, ...csvRows].join('\n');
+}
+
+function downloadCSV(csv, filename) {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }

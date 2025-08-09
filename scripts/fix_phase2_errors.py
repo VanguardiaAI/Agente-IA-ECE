@@ -91,7 +91,7 @@ async def check_woocommerce_config():
     if missing_vars:
         print(f"   ❌ Variables faltantes: {', '.join(missing_vars)}")
         print("\n   📝 Configuración requerida en .env:")
-        print("   WOOCOMMERCE_API_URL=https://staging.elcorteelectrico.com/wp-json/wc/v3")
+        print("   WOOCOMMERCE_API_URL=https://elcorteelectrico.com/wp-json/wc/v3")
         print("   WOOCOMMERCE_CONSUMER_KEY=ck_tu_consumer_key_aqui")
         print("   WOOCOMMERCE_CONSUMER_SECRET=cs_tu_consumer_secret_aqui")
         print("\n   🔗 Para obtener las credenciales:")

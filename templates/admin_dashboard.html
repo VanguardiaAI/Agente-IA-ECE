@@ -13,6 +13,7 @@
             --sidebar-width: 280px;
             --primary-color: #000000;
             --secondary-color: #ffffff;
+            --gray-50: #f9fafb;
             --gray-100: #f8f9fa;
             --gray-200: #e9ecef;
             --gray-300: #dee2e6;
@@ -24,6 +25,9 @@
             --gray-900: #212529;
             --border-radius: 12px;
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
         }
 
         * {
@@ -151,12 +155,30 @@
             border: 1px solid var(--gray-200);
             transition: var(--transition);
             height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color) 0%, var(--gray-600) 100%);
+            opacity: 0;
+            transition: var(--transition);
         }
 
         .stat-card:hover {
             transform: translateY(-4px);
             box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
             border-color: var(--gray-300);
+        }
+        
+        .stat-card:hover::before {
+            opacity: 1;
         }
 
         .stat-icon {
@@ -194,6 +216,12 @@
             padding: 2rem;
             margin-bottom: 2rem;
             border: 1px solid var(--gray-200);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            transition: var(--transition);
+        }
+        
+        .settings-section:hover {
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
         }
 
         .settings-section h4 {
@@ -201,6 +229,19 @@
             color: var(--gray-900);
             font-weight: 600;
             font-size: 1.25rem;
+            position: relative;
+            padding-bottom: 0.5rem;
+        }
+        
+        .settings-section h4::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 60px;
+            height: 2px;
+            background: var(--gray-300);
+            border-radius: 1px;
         }
 
         /* Knowledge Editor */
@@ -218,21 +259,283 @@
             width: 100%;
         }
 
-        /* Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                margin-left: calc(var(--sidebar-width) * -1);
+        /* Enhanced Responsive Design */
+        @media (max-width: 1200px) {
+            :root {
+                --sidebar-width: 260px;
             }
             
-            .sidebar.active {
-                margin-left: 0;
+            .content-wrapper {
+                padding: 1.5rem;
+            }
+        }
+        
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease-in-out;
+                box-shadow: none;
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
+                box-shadow: 8px 0 32px rgba(0, 0, 0, 0.3);
+                z-index: 1050;
             }
             
             .main-content {
                 margin-left: 0;
+                width: 100%;
+            }
+            
+            .top-navbar {
+                padding: 1rem 1.5rem;
+            }
+            
+            .content-wrapper {
+                padding: 1rem;
+            }
+            
+            .stat-card {
+                margin-bottom: 1rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            :root {
+                --sidebar-width: 280px;
+            }
+            
+            .sidebar {
+                width: 100vw;
+                max-width: var(--sidebar-width);
+            }
+            
+            .top-navbar h5 {
+                font-size: 0.9rem !important;
+            }
+            
+            .top-navbar small {
+                font-size: 0.7rem !important;
+            }
+            
+            .stat-card {
+                padding: 1.25rem;
+            }
+            
+            .stat-card h3 {
+                font-size: 1.5rem;
+            }
+            
+            .stat-icon {
+                width: 44px;
+                height: 44px;
+                font-size: 1.25rem;
+            }
+            
+            .settings-section {
+                padding: 1.5rem;
+                margin-bottom: 1.5rem;
+            }
+            
+            .settings-section h4 {
+                font-size: 1.1rem;
+            }
+            
+            .modal-xl {
+                max-width: 95vw;
+            }
+            
+            .table-responsive {
+                font-size: 0.875rem;
+            }
+            
+            .btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.8rem;
+            }
+            
+            .form-control, .form-select {
+                padding: 0.625rem 0.75rem;
+                font-size: 0.9rem;
+            }
+            
+            .message-bubble {
+                max-width: 85%;
+                padding: 10px 14px;
+                font-size: 0.9rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .content-wrapper {
+                padding: 0.75rem;
+            }
+            
+            .top-navbar {
+                padding: 0.75rem 1rem;
+            }
+            
+            .settings-section {
+                padding: 1rem;
+            }
+            
+            .stat-card {
+                padding: 1rem;
+            }
+            
+            .stat-card .d-flex {
+                flex-direction: column;
+                align-items: center !important;
+                text-align: center;
+            }
+            
+            .stat-card .ms-3 {
+                margin-left: 0 !important;
+                margin-top: 0.75rem;
+            }
+            
+            .modal-dialog {
+                margin: 0.5rem;
+            }
+            
+            .modal-body {
+                padding: 1rem;
+            }
+            
+            .table th, .table td {
+                padding: 0.5rem 0.25rem;
+                font-size: 0.8rem;
+            }
+            
+            .btn-group-vertical .btn,
+            .btn-group .btn {
+                margin-bottom: 0.25rem;
+            }
+            
+            .conversation-messages {
+                max-height: 350px !important;
+            }
+            
+            .message-bubble {
+                max-width: 90%;
+                padding: 8px 12px;
+                font-size: 0.85rem;
+            }
+            
+            /* Mobile Table Cards */
+            .table-responsive {
+                border: none;
+            }
+            
+            .mobile-card-view {
+                display: block;
+            }
+            
+            .mobile-card-view .table {
+                display: none;
+            }
+            
+            .mobile-table-card {
+                background: var(--secondary-color);
+                border: 1px solid var(--gray-200);
+                border-radius: 8px;
+                margin-bottom: 1rem;
+                padding: 1rem;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            }
+            
+            .mobile-table-card .card-header {
+                font-weight: 600;
+                color: var(--gray-900);
+                margin-bottom: 0.5rem;
+                font-size: 0.9rem;
+            }
+            
+            .mobile-table-card .card-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.25rem 0;
+                border-bottom: 1px solid var(--gray-100);
+                font-size: 0.8rem;
+            }
+            
+            .mobile-table-card .card-row:last-child {
+                border-bottom: none;
+            }
+            
+            .mobile-table-card .card-label {
+                font-weight: 600;
+                color: var(--gray-600);
+                text-transform: uppercase;
+                letter-spacing: 0.3px;
+                font-size: 0.7rem;
+            }
+            
+            .mobile-table-card .card-value {
+                color: var(--gray-900);
+                text-align: right;
+            }
+        }
+        
+        /* Mobile Sidebar Overlay */
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1040;
+            display: none;
+            backdrop-filter: blur(2px);
+        }
+        
+        .sidebar-overlay.show {
+            display: block;
+        }
+        
+        @media (min-width: 993px) {
+            .sidebar-overlay {
+                display: none !important;
             }
         }
 
+        /* Enhanced Table Styles */
+        .table {
+            margin-bottom: 0;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        
+        .table thead th {
+            background: var(--gray-50);
+            border-bottom: 2px solid var(--gray-200);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.75rem;
+            color: var(--gray-700);
+            padding: 1rem 0.75rem;
+        }
+        
+        .table tbody tr {
+            transition: var(--transition);
+        }
+        
+        .table tbody tr:hover {
+            background: var(--gray-50);
+            transform: scale(1.01);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        
+        .table tbody td {
+            vertical-align: middle;
+            padding: 0.875rem 0.75rem;
+            border-top: 1px solid var(--gray-200);
+        }
+        
         /* Custom Scrollbar */
         ::-webkit-scrollbar {
             width: 10px;
@@ -449,6 +752,78 @@
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
         }
+        
+        /* Conversation Messages Styles */
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 16px;
+            margin: 8px 0;
+            border-radius: 16px;
+            position: relative;
+            word-wrap: break-word;
+        }
+        
+        .message-user {
+            background: var(--primary-color);
+            color: var(--secondary-color);
+            margin-left: auto;
+            margin-right: 0;
+            text-align: right;
+        }
+        
+        .message-bot {
+            background: var(--gray-100);
+            color: var(--gray-900);
+            margin-left: 0;
+            margin-right: auto;
+            border: 1px solid var(--gray-200);
+        }
+        
+        .message-time {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            margin-top: 4px;
+        }
+        
+        .message-metadata {
+            font-size: 0.8rem;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+        }
+        
+        .message-intent {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-right: 8px;
+        }
+        
+        .conversation-date-separator {
+            text-align: center;
+            margin: 20px 0;
+            position: relative;
+        }
+        
+        .conversation-date-separator::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: var(--gray-300);
+            z-index: -1;
+        }
+        
+        .conversation-date-separator span {
+            background: white;
+            padding: 0 16px;
+            color: var(--gray-600);
+            font-size: 0.875rem;
+        }
     </style>
 </head>
 <body>
@@ -456,6 +831,9 @@
     <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner-border text-light" style="width: 3rem; height: 3rem;"></div>
     </div>
+    
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
@@ -472,6 +850,11 @@
             <li>
                 <a href="#dashboard" class="menu-item active" data-section="dashboard">
                     <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+            </li>
+            <li>
+                <a href="#conversations" class="menu-item" data-section="conversations">
+                    <i class="bi bi-chat-dots"></i> Conversaciones
                 </a>
             </li>
             <li>
@@ -506,7 +889,7 @@
     <div class="main-content">
         <!-- Top Navbar -->
         <div class="top-navbar">
-            <button class="btn btn-link d-md-none" onclick="toggleSidebar()">
+            <button class="btn btn-outline-secondary d-lg-none me-2" onclick="toggleSidebar()" style="border: none; background: none; color: var(--gray-700); padding: 0.5rem;">
                 <i class="bi bi-list fs-4"></i>
             </button>
             <div>
@@ -530,7 +913,7 @@
                     <div class="col-md-3 mb-3">
                         <div class="stat-card">
                             <div class="d-flex align-items-center">
-                                <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                                <div class="stat-icon">
                                     <i class="bi bi-chat-dots"></i>
                                 </div>
                                 <div class="ms-3">
@@ -543,7 +926,7 @@
                     <div class="col-md-3 mb-3">
                         <div class="stat-card">
                             <div class="d-flex align-items-center">
-                                <div class="stat-icon bg-success bg-opacity-10 text-success">
+                                <div class="stat-icon">
                                     <i class="bi bi-people"></i>
                                 </div>
                                 <div class="ms-3">
@@ -556,7 +939,7 @@
                     <div class="col-md-3 mb-3">
                         <div class="stat-card">
                             <div class="d-flex align-items-center">
-                                <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                                <div class="stat-icon">
                                     <i class="bi bi-book"></i>
                                 </div>
                                 <div class="ms-3">
@@ -569,7 +952,7 @@
                     <div class="col-md-3 mb-3">
                         <div class="stat-card">
                             <div class="d-flex align-items-center">
-                                <div class="stat-icon bg-info bg-opacity-10 text-info">
+                                <div class="stat-icon">
                                     <i class="bi bi-calendar-range"></i>
                                 </div>
                                 <div class="ms-3">
@@ -790,6 +1173,153 @@
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                                 <button type="button" class="btn btn-primary" onclick="saveDocument()">Guardar</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conversations Section -->
+            <div id="conversations-section" class="content-section" style="display: none;">
+                <h2 class="mb-4">Gestión de Conversaciones</h2>
+                
+                <!-- Search and Filters -->
+                <div class="settings-section mb-4">
+                    <h4>Buscar y Filtrar</h4>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Buscar en conversaciones</label>
+                            <input type="text" class="form-control" id="searchQuery" placeholder="Buscar por contenido...">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Plataforma</label>
+                            <select class="form-select" id="filterPlatform">
+                                <option value="">Todas</option>
+                                <option value="wordpress">WordPress</option>
+                                <option value="whatsapp">WhatsApp</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Usuario</label>
+                            <input type="text" class="form-control" id="filterUserId" placeholder="ID de usuario">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Fecha desde</label>
+                            <input type="date" class="form-control" id="filterDateFrom">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Fecha hasta</label>
+                            <input type="date" class="form-control" id="filterDateTo">
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <button class="btn btn-primary me-2" onclick="searchConversations()">
+                                <i class="bi bi-search"></i> Buscar
+                            </button>
+                            <button class="btn btn-secondary" onclick="clearConversationFilters()">
+                                <i class="bi bi-x-circle"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Conversations List -->
+                <div class="settings-section">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4>Lista de Conversaciones</h4>
+                        <div>
+                            <button class="btn btn-success" onclick="exportConversations()">
+                                <i class="bi bi-download"></i> Exportar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Fecha/Hora</th>
+                                    <th>Usuario</th>
+                                    <th>Plataforma</th>
+                                    <th>Mensajes</th>
+                                    <th>Duración</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="conversationsList">
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">
+                                        <div class="spinner-border spinner-border-sm me-2"></div>
+                                        Cargando conversaciones...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <nav id="conversationsPagination" style="display: none;">
+                        <ul class="pagination justify-content-center">
+                            <li class="page-item">
+                                <a class="page-link" href="#" onclick="previousConversationsPage()">Anterior</a>
+                            </li>
+                            <li class="page-item active">
+                                <span class="page-link" id="currentPage">1</span>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="#" onclick="nextConversationsPage()">Siguiente</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Conversation Detail Modal -->
+            <div class="modal fade" id="conversationModal" tabindex="-1">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Detalle de Conversación</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <strong>ID Conversación:</strong>
+                                    <p id="convDetailId" class="text-muted mb-0"></p>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Usuario:</strong>
+                                    <p id="convDetailUser" class="text-muted mb-0"></p>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Plataforma:</strong>
+                                    <p id="convDetailPlatform" class="text-muted mb-0"></p>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Duración:</strong>
+                                    <p id="convDetailDuration" class="text-muted mb-0"></p>
+                                </div>
+                            </div>
+                            
+                            <div class="conversation-messages" id="conversationMessages" style="max-height: 500px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 8px; padding: 1rem;">
+                                <div class="text-center">
+                                    <div class="spinner-border"></div>
+                                    <p class="mt-2">Cargando mensajes...</p>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle"></i>
+                                    Los mensajes se muestran en orden cronológico. Los mensajes del usuario aparecen a la derecha, los del bot a la izquierda.
+                                </small>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                            <button type="button" class="btn btn-primary" onclick="exportConversation()">
+                                <i class="bi bi-download"></i> Exportar Conversación
+                            </button>
                         </div>
                     </div>
                 </div>

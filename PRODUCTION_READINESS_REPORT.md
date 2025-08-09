@@ -25,7 +25,7 @@ El sistema Eva AI está **parcialmente listo** para producción. Se han identifi
 - ✅ Extensión pgvector instalada y operativa
 
 ### 3. **Integración WooCommerce** ✅
-- ✅ API conectada exitosamente a `staging.elcorteelectrico.com`
+- ✅ API conectada exitosamente a `elcorteelectrico.com`
 - ✅ Autenticación funcionando correctamente
 - ✅ Permisos de lectura confirmados
 - ✅ Acceso a productos y categorías verificado

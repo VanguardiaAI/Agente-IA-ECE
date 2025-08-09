@@ -233,7 +233,7 @@ class WhatsAppTemplateManager:
         con el formato específico requerido por Meta
         
         Variables de la plantilla:
-        {{1}}: Código de descuento (EXPRESS)
+        {{1}}: Código de descuento (DESCUENTOEXPRESS)
         {{2}}: Lista formateada de productos con guión
         {{3}}: Total del carrito en formato "X,XX €"
         
@@ -248,8 +248,8 @@ class WhatsAppTemplateManager:
         # Componente del cuerpo con 3 parámetros
         body_params = []
         
-        # Variable {{1}}: Código de descuento (siempre EXPRESS)
-        discount_code = cart_data.get("discount_code", "EXPRESS")
+        # Variable {{1}}: Código de descuento (siempre DESCUENTOEXPRESS)
+        discount_code = cart_data.get("discount_code", "DESCUENTOEXPRESS")
         body_params.append({
             "type": "text",
             "text": discount_code

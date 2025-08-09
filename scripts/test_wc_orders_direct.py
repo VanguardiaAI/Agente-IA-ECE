@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 
 # Configuración de WooCommerce
-WC_URL = "https://staging.elcorteelectrico.com"
+WC_URL = "https://elcorteelectrico.com"
 WC_KEY = "ck_7d08edfcdb4c80e03cf5ade6b6abc02c8772900d"
 WC_SECRET = "cs_1fe210cfd63d5786ef73ef735412ee8bc41704df"
 
