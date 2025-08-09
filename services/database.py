@@ -650,44 +650,265 @@ class HybridDatabaseService:
         
         # Términos técnicos específicos que SIEMPRE deben priorizarse
         specific_technical_terms = {
-            'automático', 'automáticos', 'dpn', 'led', 'ip65', 'ip44', 'ip20',
-            'diferencial', 'diferenciales', 'magnetotérmico', 'magnetotérmicos',
-            'interruptor', 'interruptores', 'cable', 'cables', 'luminaria', 'luminarias',
-            'lámpara', 'lámparas', 'bombilla', 'bombillas', 'tubo', 'tubos',
-            'caja', 'cajas', 'base', 'bases', 'enchufe', 'enchufes',
-            'transformador', 'transformadores', 'contactor', 'contactores',
-            'relé', 'relés', 'detector', 'detectores', 'sensor', 'sensores',
-            'ventilador', 'ventiladores', 'techo', 'pared', 'industrial',
+            # Términos originales básicos
+            'automático', 'automáticos', 'automatico', 'automaticos', 'dpn', 'led', 'ip65', 'ip44', 'ip20',
+            'diferencial', 'diferenciales', 'magnetotérmico', 'magnetotérmicos', 'magnetotermico',
+            'interruptor', 'interruptores', 'cable', 'cables', 'hilo', 'hilos',
+            'luminaria', 'luminarias', 'lámpara', 'lámparas', 'lampara', 'lamparas',
+            'bombilla', 'bombillas', 'foco', 'focos', 'luz', 'luces', 'bombillo', 'bombillos',
+            'tubo', 'tubos', 'caja', 'cajas', 'base', 'bases', 'enchufe', 'enchufes',
+            'transformador', 'transformadores', 'trafo', 'trafos',
+            'contactor', 'contactores', 'relé', 'relés', 'detector', 'detectores', 
+            'sensor', 'sensores', 'ventilador', 'ventiladores', 'techo', 'pared', 'industrial',
             'bipolar', 'tripolar', 'tetrapolar', 'monopolar', 'unipolar',
             'vivienda', 'casa', 'hogar', 'doméstico', 'residencial',
-            'monofásico', 'trifásico', 'curva'
+            'monofásico', 'trifásico', 'curva',
+            
+            # Nuevos términos agregados según la tabla
+            'pia', 'disyuntor', 'llave', 'protección', 'personas',
+            'fusibles', 'fusible', 'plomos', 'plomo', 'cortacircuitos', 'cortacircuito',
+            'portero', 'porteros', 'telefonillo', 'telefonillos', 'auricular', 'auriculares',
+            'intercomunicador', 'intercomunicadores', 'videoportero', 'videoporteros',
+            'visor', 'puerta', 'bridas', 'brida', 'cintillos', 'cintillo', 'fleje',
+            'chincho', 'abrazadera', 'abrazaderas', 'precinto', 'precintos',
+            'termos', 'termo', 'calentador', 'calentadores', 'agua', 'toalleros', 'toallero',
+            'secatoallas', 'radiador', 'radiadores', 'calderas', 'caldera',
+            'termoventilador', 'termoventiladores', 'estufa', 'estufas', 'baño',
+            'emisores', 'emisor', 'termicos', 'térmicos', 'termico', 'térmico',
+            'electrico', 'eléctrico', 'electricos', 'eléctricos', 'inercia', 'termica', 'térmica',
+            'calefactor', 'calefactores', 'convector', 'convectores', 'aire', 'convección',
+            'portalamparas', 'portalámparas', 'casquillo', 'casquillos',
+            'clema', 'clemas', 'regleta', 'regletas', 'borna', 'bornas', 'conector', 'conectores',
+            'arco', 'apaga', 'chispas', 'superinmunizado', 'hpi', 'fsi', 'si', 'b-si', 'a-si',
+            '1p', '2p', '3p', '4p', '1+n', '3+n', 'miliamperios', 'ma',
+            'ladrón', 'ladrones', 'prolongador', 'prolongadores',
+            'estanqueidad', 'ip', 'grado', 'protección', 'cetac',
+            'industrial', 'industriales', 'control', 'nivel', 'boya', 'boyas',
+            'estabilizador', 'estabilizadores', 'regulador', 'reguladores', 'voltaje',
+            'controlador', 'controladores', 'afianzador', 'afianzadores',
+            'estanco', 'estancos', 'hermetico', 'hermético', 'hermeticos', 'herméticos'
         }
         
         # Sinónimos técnicos - mapeo de términos equivalentes
         technical_synonyms = {
-            'bipolar': ['2p', '2 polos', 'dos polos', '2polos'],
-            '2p': ['bipolar', '2 polos', 'dos polos', '2polos'],
-            'tripolar': ['3p', '3 polos', 'tres polos', '3polos'],
-            '3p': ['tripolar', '3 polos', 'tres polos', '3polos'],
-            'tetrapolar': ['4p', '4 polos', 'cuatro polos', '4polos'],
-            '4p': ['tetrapolar', '4 polos', 'cuatro polos', '4polos'],
-            'monopolar': ['1p', '1 polo', 'un polo', 'unipolar'],
-            '1p': ['monopolar', '1 polo', 'un polo', 'unipolar'],
-            'vivienda': ['doméstico', 'domestico', 'residencial', 'hogar', 'casa'],
-            'domestico': ['vivienda', 'doméstico', 'residencial', 'hogar', 'casa'],
-            'doméstico': ['vivienda', 'domestico', 'residencial', 'hogar', 'casa'],
-            'casa': ['vivienda', 'doméstico', 'domestico', 'residencial', 'hogar'],
-            'hogar': ['vivienda', 'doméstico', 'domestico', 'residencial', 'casa'],
-            'residencial': ['vivienda', 'doméstico', 'domestico', 'hogar', 'casa'],
-            'monofasico': ['monofásico', '1f', 'fase', 'una fase'],
-            'monofásico': ['monofasico', '1f', 'fase', 'una fase'],
-            'trifasico': ['trifásico', '3f', 'tres fases'],
-            'trifásico': ['trifasico', '3f', 'tres fases'],
-            'magnetotermico': ['magnetotérmico', 'pia', 'automático'],
-            'magnetotérmico': ['magnetotermico', 'pia', 'automático'],
-            'pia': ['magnetotérmico', 'magnetotermico', 'automático'],
-            'automatico': ['automático', 'magnetotérmico', 'magnetotermico', 'pia'],
-            'automático': ['automatico', 'magnetotérmico', 'magnetotermico', 'pia']
+            # Automáticos / Magnetotérmicos
+            'automaticos': ['magnetotermico', 'magnetotérmico', 'pia', 'disyuntor'],
+            'automatico': ['magnetotermico', 'magnetotérmico', 'pia', 'disyuntor'],
+            'automático': ['magnetotérmico', 'pia', 'disyuntor'],
+            'automáticos': ['magnetotérmico', 'pia', 'disyuntor'],
+            'magnetotermico': ['automatico', 'automático', 'pia', 'disyuntor'],
+            'magnetotérmico': ['automático', 'pia', 'disyuntor'],
+            'pia': ['automatico', 'automático', 'magnetotermico', 'magnetotérmico', 'disyuntor'],
+            'disyuntor': ['automatico', 'automático', 'magnetotermico', 'magnetotérmico', 'pia'],
+            
+            # Diferenciales
+            'diferencial': ['llave diferencial', 'protección de personas'],
+            'diferenciales': ['llave diferencial', 'protección de personas'],
+            'llave diferencial': ['diferencial', 'protección de personas'],
+            'protección de personas': ['diferencial', 'llave diferencial'],
+            
+            # Fusibles
+            'fusibles': ['plomos', 'cortacircuitos'],
+            'fusible': ['plomo', 'cortacircuito'],
+            'plomos': ['fusibles', 'cortacircuitos'],
+            'plomo': ['fusible', 'cortacircuito'],
+            'cortacircuitos': ['fusibles', 'plomos'],
+            'cortacircuito': ['fusible', 'plomo'],
+            
+            # Cables
+            'cable': ['hilo'],
+            'cables': ['hilos'],
+            'hilo': ['cable'],
+            'hilos': ['cables'],
+            
+            # Lámparas
+            'lampara': ['bombilla', 'foco', 'luz', 'bombillo'],
+            'lámpara': ['bombilla', 'foco', 'luz', 'bombillo'],
+            'lamparas': ['bombillas', 'focos', 'luces', 'bombillos'],
+            'lámparas': ['bombillas', 'focos', 'luces', 'bombillos'],
+            'bombilla': ['lampara', 'lámpara', 'foco', 'luz', 'bombillo'],
+            'bombillas': ['lamparas', 'lámparas', 'focos', 'luces', 'bombillos'],
+            'foco': ['lampara', 'lámpara', 'bombilla', 'luz', 'bombillo'],
+            'focos': ['lamparas', 'lámparas', 'bombillas', 'luces', 'bombillos'],
+            'luz': ['lampara', 'lámpara', 'bombilla', 'foco', 'bombillo'],
+            'luces': ['lamparas', 'lámparas', 'bombillas', 'focos', 'bombillos'],
+            'bombillo': ['lampara', 'lámpara', 'bombilla', 'foco', 'luz'],
+            'bombillos': ['lamparas', 'lámparas', 'bombillas', 'focos', 'luces'],
+            
+            # Porteros
+            'portero': ['telefonillo', 'auricular', 'intercomunicador'],
+            'porteros': ['telefonillos', 'auriculares', 'intercomunicadores'],
+            'telefonillo': ['portero', 'auricular', 'intercomunicador'],
+            'telefonillos': ['porteros', 'auriculares', 'intercomunicadores'],
+            'auricular': ['portero', 'telefonillo', 'intercomunicador'],
+            'auriculares': ['porteros', 'telefonillos', 'intercomunicadores'],
+            'intercomunicador': ['portero', 'telefonillo', 'auricular'],
+            'intercomunicadores': ['porteros', 'telefonillos', 'auriculares'],
+            
+            # Videoporteros
+            'videoportero': ['telefonillo con camara', 'telefonillo con cámara', 'visor de puerta'],
+            'videoporteros': ['telefonillos con camara', 'telefonillos con cámara', 'visores de puerta'],
+            'telefonillo con camara': ['videoportero', 'visor de puerta'],
+            'telefonillo con cámara': ['videoportero', 'visor de puerta'],
+            'visor de puerta': ['videoportero', 'telefonillo con camara', 'telefonillo con cámara'],
+            
+            # Bridas
+            'bridas': ['cintillos', 'fleje', 'chincho', 'abrazadera', 'precinto'],
+            'brida': ['cintillo', 'fleje', 'chincho', 'abrazadera', 'precinto'],
+            'cintillos': ['bridas', 'fleje', 'chincho', 'abrazadera', 'precinto'],
+            'cintillo': ['brida', 'fleje', 'chincho', 'abrazadera', 'precinto'],
+            'fleje': ['bridas', 'cintillos', 'chincho', 'abrazadera', 'precinto'],
+            'chincho': ['bridas', 'cintillos', 'fleje', 'abrazadera', 'precinto'],
+            'abrazadera': ['bridas', 'cintillos', 'fleje', 'chincho', 'precinto'],
+            'abrazaderas': ['bridas', 'cintillos', 'fleje', 'chincho', 'precinto'],
+            'precinto': ['bridas', 'cintillos', 'fleje', 'chincho', 'abrazadera'],
+            'precintos': ['bridas', 'cintillos', 'fleje', 'chincho', 'abrazadera'],
+            
+            # Termos
+            'termos': ['calentador de agua'],
+            'termo': ['calentador de agua'],
+            'calentador de agua': ['termo', 'termos'],
+            'calentadores de agua': ['termos'],
+            
+            # Toalleros
+            'toalleros': ['secatoallas', 'radiador toallero'],
+            'toallero': ['secatoallas', 'radiador toallero'],
+            'secatoallas': ['toallero', 'radiador toallero'],
+            'radiador toallero': ['toallero', 'secatoallas'],
+            'radiadores toallero': ['toalleros', 'secatoallas'],
+            
+            # Calderas
+            'calderas': ['calentador'],
+            'caldera': ['calentador'],
+            'calentador': ['caldera'],
+            'calentadores': ['calderas'],
+            
+            # Termoventilador
+            'termoventilador': ['estufa con ventilador', 'calentador con ventilador'],
+            'termoventiladores': ['estufas con ventilador', 'calentadores con ventilador'],
+            'estufa con ventilador': ['termoventilador', 'calentador con ventilador'],
+            'calentador con ventilador': ['termoventilador', 'estufa con ventilador'],
+            
+            # Emisores térmicos
+            'emisores termicos': ['radiador electrico', 'radiador eléctrico', 'radiador de inercia termica'],
+            'emisor termico': ['radiador electrico', 'radiador eléctrico', 'radiador de inercia termica'],
+            'emisores térmicos': ['radiador eléctrico', 'radiador de inercia térmica'],
+            'emisor térmico': ['radiador eléctrico', 'radiador de inercia térmica'],
+            'radiador electrico': ['emisor termico', 'emisor térmico', 'radiador de inercia termica'],
+            'radiador eléctrico': ['emisor térmico', 'radiador de inercia térmica'],
+            'radiador de inercia termica': ['emisor termico', 'emisor térmico', 'radiador electrico', 'radiador eléctrico'],
+            'radiador de inercia térmica': ['emisor térmico', 'radiador eléctrico'],
+            
+            # Calefactor
+            'calefactor': ['radiador electrico', 'radiador eléctrico', 'estufa', 'calentador de baño'],
+            'calefactores': ['radiadores electricos', 'radiadores eléctricos', 'estufas', 'calentadores de baño'],
+            'estufa': ['calefactor', 'radiador electrico', 'radiador eléctrico', 'calentador de baño'],
+            'estufas': ['calefactores', 'radiadores electricos', 'radiadores eléctricos', 'calentadores de baño'],
+            'calentador de baño': ['calefactor', 'radiador electrico', 'radiador eléctrico', 'estufa'],
+            'calentadores de baño': ['calefactores', 'radiadores electricos', 'radiadores eléctricos', 'estufas'],
+            
+            # Convector
+            'convector': ['radiador de aire', 'radiador por convección'],
+            'convectores': ['radiadores de aire', 'radiadores por convección'],
+            'radiador de aire': ['convector', 'radiador por convección'],
+            'radiadores de aire': ['convectores', 'radiadores por convección'],
+            'radiador por convección': ['convector', 'radiador de aire'],
+            'radiadores por convección': ['convectores', 'radiadores de aire'],
+            
+            # Portalámparas
+            'portalamparas': ['casquillo'],
+            'portalámparas': ['casquillo'],
+            'casquillo': ['portalamparas', 'portalámparas'],
+            'casquillos': ['portalamparas', 'portalámparas'],
+            
+            # Clemas
+            'clema': ['regleta', 'borna', 'conector cable'],
+            'clemas': ['regletas', 'bornas', 'conectores cable'],
+            'regleta': ['clema', 'borna', 'conector cable', 'ladrón', 'prolongador'],
+            'regletas': ['clemas', 'bornas', 'conectores cable', 'ladrones', 'prolongadores'],
+            'borna': ['clema', 'regleta', 'conector cable'],
+            'bornas': ['clemas', 'regletas', 'conectores cable'],
+            'conector cable': ['clema', 'regleta', 'borna'],
+            'conectores cable': ['clemas', 'regletas', 'bornas'],
+            
+            # Arco eléctrico
+            'arco electrico': ['apaga chispas'],
+            'arco eléctrico': ['apaga chispas'],
+            'apaga chispas': ['arco electrico', 'arco eléctrico'],
+            
+            # Superinmunizado
+            'superinmunizado': ['diferencial hpi', 'diferencial fsi', 'diferencial si', 'diferencial b-si', 'diferencial a-si'],
+            'diferencial hpi': ['superinmunizado'],
+            'diferencial fsi': ['superinmunizado'],
+            'diferencial si': ['superinmunizado'],
+            'diferencial b-si': ['superinmunizado'],
+            'diferencial a-si': ['superinmunizado'],
+            
+            # Polos
+            'unipolar': ['1p'],
+            '1p': ['unipolar'],
+            'bipolar': ['2p', '1+n'],
+            '2p': ['bipolar', '1+n'],
+            '1+n': ['bipolar', '2p'],
+            'tripolar': ['3p'],
+            '3p': ['tripolar'],
+            'tetrapolar': ['4p', '3+n'],
+            '4p': ['tetrapolar', '3+n'],
+            '3+n': ['tetrapolar', '4p'],
+            
+            # Miliamperios
+            'miliamperios': ['ma'],
+            'ma': ['miliamperios'],
+            
+            # Regleta (adicional)
+            'ladrón': ['regleta', 'prolongador'],
+            'ladrones': ['regletas', 'prolongadores'],
+            'prolongador': ['regleta', 'ladrón'],
+            'prolongadores': ['regletas', 'ladrones'],
+            
+            # Estanqueidad
+            'estanqueidad': ['ip', 'grado de protección'],
+            'ip': ['estanqueidad', 'grado de protección'],
+            'grado de protección': ['estanqueidad', 'ip'],
+            
+            # Cetac
+            'cetac': ['conector industrial', 'enchufe industrial', 'base industrial'],
+            'conector industrial': ['cetac', 'enchufe industrial', 'base industrial'],
+            'conectores industriales': ['cetac', 'enchufes industriales', 'bases industriales'],
+            'enchufe industrial': ['cetac', 'conector industrial', 'base industrial'],
+            'enchufes industriales': ['cetac', 'conectores industriales', 'bases industriales'],
+            'base industrial': ['cetac', 'conector industrial', 'enchufe industrial'],
+            'bases industriales': ['cetac', 'conectores industriales', 'enchufes industriales'],
+            
+            # Control de nivel
+            'control de nivel': ['boya'],
+            'controles de nivel': ['boyas'],
+            'boya': ['control de nivel'],
+            'boyas': ['controles de nivel'],
+            
+            # Transformador
+            'transformador': ['trafo'],
+            'transformadores': ['trafos'],
+            'trafo': ['transformador'],
+            'trafos': ['transformadores'],
+            
+            # Estabilizador
+            'estabilizador': ['regulador de voltaje', 'controlador de voltaje', 'afianzador'],
+            'estabilizadores': ['reguladores de voltaje', 'controladores de voltaje', 'afianzadores'],
+            'regulador de voltaje': ['estabilizador', 'controlador de voltaje', 'afianzador'],
+            'reguladores de voltaje': ['estabilizadores', 'controladores de voltaje', 'afianzadores'],
+            'controlador de voltaje': ['estabilizador', 'regulador de voltaje', 'afianzador'],
+            'controladores de voltaje': ['estabilizadores', 'reguladores de voltaje', 'afianzadores'],
+            'afianzador': ['estabilizador', 'regulador de voltaje', 'controlador de voltaje'],
+            'afianzadores': ['estabilizadores', 'reguladores de voltaje', 'controladores de voltaje'],
+            
+            # Estanco
+            'estanco': ['hermetico', 'hermético'],
+            'estancos': ['hermeticos', 'herméticos'],
+            'hermetico': ['estanco'],
+            'hermético': ['estanco'],
+            'hermeticos': ['estancos'],
+            'herméticos': ['estancos']
         }
         
         # PASO 1: Buscar términos técnicos específicos conocidos
