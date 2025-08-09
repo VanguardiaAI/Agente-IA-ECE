@@ -45,21 +45,35 @@ echo "   User: $POSTGRES_USER"
 # Buscar el contenedor de PostgreSQL
 echo "🔍 Buscando contenedor de PostgreSQL..."
 
-# Intentar encontrar el contenedor de postgres
+# Buscar específicamente el contenedor de PostgreSQL
 POSTGRES_CONTAINER=""
 for container in $(docker ps --format "{{.Names}}"); do
-    if docker exec $container psql --version &>/dev/null; then
+    if [[ "$container" == *"postgres"* ]]; then
         POSTGRES_CONTAINER=$container
-        echo "   ✅ Encontrado contenedor: $container"
+        echo "   ✅ Encontrado contenedor de PostgreSQL: $container"
         break
     fi
 done
 
+# Si no encontramos contenedor específico de postgres, buscar uno que tenga psql
 if [ -z "$POSTGRES_CONTAINER" ]; then
-    echo "❌ No se encontró contenedor de PostgreSQL funcionando"
-    echo "   Contenedores disponibles:"
-    docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
-    exit 1
+    echo "   🔍 Buscando contenedor con cliente psql..."
+    for container in $(docker ps --format "{{.Names}}"); do
+        if docker exec $container psql --version &>/dev/null; then
+            CLIENT_CONTAINER=$container
+            echo "   ✅ Encontrado contenedor con psql: $container"
+            break
+        fi
+    done
+    
+    if [ -z "$CLIENT_CONTAINER" ]; then
+        echo "❌ No se encontró contenedor con PostgreSQL o psql"
+        echo "   Contenedores disponibles:"
+        docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+        exit 1
+    fi
+else
+    CLIENT_CONTAINER=$POSTGRES_CONTAINER
 fi
 
 # Función para ejecutar SQL usando Docker
@@ -71,9 +85,9 @@ execute_sql() {
     
     if [ -f "$file" ]; then
         # Copiar archivo SQL al contenedor y ejecutarlo
-        docker cp "$file" "$POSTGRES_CONTAINER:/tmp/migration.sql"
-        docker exec "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/migration.sql
-        docker exec "$POSTGRES_CONTAINER" rm /tmp/migration.sql
+        docker cp "$file" "$CLIENT_CONTAINER:/tmp/migration.sql"
+        docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CLIENT_CONTAINER" psql -h "$POSTGRES_HOST" -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/migration.sql
+        docker exec "$CLIENT_CONTAINER" rm /tmp/migration.sql
         echo "   ✅ $description completado"
     else
         echo "   ⚠️  Archivo no encontrado: $file"
@@ -82,7 +96,10 @@ execute_sql() {
 
 # Verificar conexión
 echo "🔗 Verificando conexión a base de datos..."
-if docker exec "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version();" > /dev/null; then
+echo "   Usando contenedor cliente: $CLIENT_CONTAINER"
+echo "   Conectando a host: $POSTGRES_HOST"
+
+if docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CLIENT_CONTAINER" psql -h "$POSTGRES_HOST" -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version();" > /dev/null; then
     echo "   ✅ Conexión exitosa"
 else
     echo "   ❌ Error de conexión"
@@ -94,12 +111,12 @@ echo "💾 Creando backup de seguridad..."
 timestamp=$(date +%Y%m%d_%H%M%S)
 backup_file="backup_production_${timestamp}.sql"
 
-docker exec "$POSTGRES_CONTAINER" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --schema-only > "$backup_file"
+docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CLIENT_CONTAINER" pg_dump -h "$POSTGRES_HOST" -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" --schema-only > "$backup_file"
 echo "   📁 Backup guardado como: $backup_file"
 
 # Verificar tablas existentes
 echo "📋 Verificando tablas existentes..."
-docker exec "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CLIENT_CONTAINER" psql -h "$POSTGRES_HOST" -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
 SELECT 
     table_name,
     CASE 
@@ -128,7 +145,7 @@ fi
 
 # Verificar migración final
 echo "✅ Verificando migración final..."
-docker exec "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CLIENT_CONTAINER" psql -h "$POSTGRES_HOST" -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
 SELECT 
     CASE 
         WHEN EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'conversations') 
@@ -149,7 +166,7 @@ SELECT
 
 # Verificar que las funciones críticas existen
 echo "🔧 Verificando funciones de base de datos..."
-docker exec "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CLIENT_CONTAINER" psql -h "$POSTGRES_HOST" -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
 SELECT 
     routine_name,
     '✅ Disponible' as status
