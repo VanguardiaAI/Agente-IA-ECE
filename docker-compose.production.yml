@@ -44,7 +44,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./knowledge:/app/knowledge:ro
+      - ./knowledge:/app/knowledge
       - ./logs:/app/logs
     networks:
       - eva_network
@@ -78,7 +78,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./knowledge:/app/knowledge:ro
+      - ./knowledge:/app/knowledge
       - ./templates:/app/templates:ro
       - ./static:/app/static:ro
       - ./logs:/app/logs
