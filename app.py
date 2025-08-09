@@ -935,14 +935,11 @@ async def get_conversations(
 ):
     """Obtener detalles de conversaciones recientes"""
     try:
-        if not metrics_service:
-            return {
-                "conversations": [],
-                "total": 0,
-                "message": "Servicio de métricas no disponible"
-            }
+        # Usar el singleton para obtener el servicio
+        from services.metrics_singleton import get_metrics_service
+        ms = await get_metrics_service()
         
-        conversations = await metrics_service.get_conversation_details(
+        conversations = await ms.get_conversation_details(
             limit=limit,
             offset=offset,
             platform=platform
@@ -964,13 +961,11 @@ async def get_conversations(
 async def get_metrics_summary():
     """Obtener resumen de métricas para el dashboard de admin"""
     try:
-        if not metrics_service:
-            return {
-                "metrics": {},
-                "message": "Servicio de métricas no disponible"
-            }
+        # Usar el singleton para obtener el servicio
+        from services.metrics_singleton import get_metrics_service
+        ms = await get_metrics_service()
         
-        metrics = await metrics_service.get_dashboard_stats()
+        metrics = await ms.get_dashboard_stats()
         
         return {
             "metrics": metrics,
@@ -985,16 +980,17 @@ async def get_metrics_summary():
 async def get_conversation_messages(conversation_id: str):
     """Obtener todos los mensajes de una conversación específica"""
     try:
-        if not metrics_service:
-            raise HTTPException(status_code=503, detail="Servicio de métricas no disponible")
+        # Usar el singleton para obtener el servicio
+        from services.metrics_singleton import get_metrics_service
+        ms = await get_metrics_service()
         
         # Obtener detalles de la conversación
-        conversation_details = await metrics_service.get_conversation_by_id(conversation_id)
+        conversation_details = await ms.get_conversation_by_id(conversation_id)
         if not conversation_details:
             raise HTTPException(status_code=404, detail="Conversación no encontrada")
         
         # Obtener mensajes de la conversación
-        messages = await metrics_service.get_conversation_messages(conversation_id)
+        messages = await ms.get_conversation_messages(conversation_id)
         
         return {
             "conversation": conversation_details,
@@ -1021,15 +1017,16 @@ async def search_conversations(
 ):
     """Buscar conversaciones con filtros avanzados"""
     try:
-        if not metrics_service:
-            raise HTTPException(status_code=503, detail="Servicio de métricas no disponible")
+        # Usar el singleton para obtener el servicio
+        from services.metrics_singleton import get_metrics_service
+        ms = await get_metrics_service()
         
         # Convertir fechas si se proporcionan
         date_from_dt = datetime.fromisoformat(date_from) if date_from else None
         date_to_dt = datetime.fromisoformat(date_to) if date_to else None
         
         # Buscar conversaciones
-        results = await metrics_service.search_conversations(
+        results = await ms.search_conversations(
             query=query,
             user_id=user_id,
             platform=platform,
@@ -1062,10 +1059,11 @@ async def search_conversations(
 async def get_conversation_analytics(conversation_id: str):
     """Obtener análisis detallado de una conversación"""
     try:
-        if not metrics_service:
-            raise HTTPException(status_code=503, detail="Servicio de métricas no disponible")
+        # Usar el singleton para obtener el servicio
+        from services.metrics_singleton import get_metrics_service
+        ms = await get_metrics_service()
         
-        analytics = await metrics_service.get_conversation_analytics(conversation_id)
+        analytics = await ms.get_conversation_analytics(conversation_id)
         if not analytics:
             raise HTTPException(status_code=404, detail="Conversación no encontrada")
         
@@ -1088,13 +1086,14 @@ async def export_conversations(
 ):
     """Exportar conversaciones en formato JSON o CSV"""
     try:
-        if not metrics_service:
-            raise HTTPException(status_code=503, detail="Servicio de métricas no disponible")
+        # Usar el singleton para obtener el servicio
+        from services.metrics_singleton import get_metrics_service
+        ms = await get_metrics_service()
         
         if format not in ["json", "csv"]:
             raise HTTPException(status_code=400, detail="Formato debe ser 'json' o 'csv'")
         
-        result = await metrics_service.export_conversations(
+        result = await ms.export_conversations(
             conversation_ids=conversation_ids,
             format=format,
             include_messages=include_messages
