@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script para configurar la base de datos de producción
+# Script para configurar la base de datos de producción (Versión 2)
 # Este script aplica todas las migraciones necesarias para el sistema de conversaciones
 
 set -e  # Salir si hay errores
@@ -14,23 +14,56 @@ if [ ! -f "scripts/create_metrics_tables.sql" ]; then
     exit 1
 fi
 
-# Verificar variables de entorno
-if [ -z "$POSTGRES_HOST" ] || [ -z "$POSTGRES_DB" ] || [ -z "$POSTGRES_USER" ]; then
-    echo "⚠️  Cargando variables de entorno desde .env..."
+# Función para cargar variables de .env de forma segura
+load_env() {
     if [ -f ".env" ]; then
-        set -a  # Automatically export all variables
-        source .env
-        set +a  # Turn off automatic export
+        echo "⚠️  Cargando variables de entorno desde .env..."
+        # Cargar solo las líneas que son variables válidas
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Ignorar líneas vacías y comentarios
+            if [[ -n "$line" && ! "$line" =~ ^[[:space:]]*# ]]; then
+                # Verificar que la línea tiene formato VAR=value
+                if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+                    var_name="${BASH_REMATCH[1]}"
+                    var_value="${BASH_REMATCH[2]}"
+                    # Remover comillas si las hay
+                    var_value="${var_value%\"}"
+                    var_value="${var_value#\"}"
+                    var_value="${var_value%\'}"
+                    var_value="${var_value#\'}"
+                    export "$var_name"="$var_value"
+                    echo "   ✓ Cargada: $var_name"
+                fi
+            fi
+        done < .env
     else
         echo "❌ Error: Archivo .env no encontrado"
         exit 1
     fi
+}
+
+# Verificar y cargar variables de entorno
+if [ -z "$POSTGRES_HOST" ] || [ -z "$POSTGRES_DB" ] || [ -z "$POSTGRES_USER" ]; then
+    load_env
+fi
+
+# Verificar que las variables necesarias están cargadas
+if [ -z "$POSTGRES_HOST" ] || [ -z "$POSTGRES_DB" ] || [ -z "$POSTGRES_USER" ] || [ -z "$POSTGRES_PASSWORD" ]; then
+    echo "❌ Error: Variables de base de datos no encontradas en .env"
+    echo "   Variables necesarias: POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD"
+    echo "   Variables encontradas:"
+    echo "   - POSTGRES_HOST: ${POSTGRES_HOST:-'NO DEFINIDA'}"
+    echo "   - POSTGRES_DB: ${POSTGRES_DB:-'NO DEFINIDA'}"
+    echo "   - POSTGRES_USER: ${POSTGRES_USER:-'NO DEFINIDA'}"
+    echo "   - POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:+'DEFINIDA'}"
+    exit 1
 fi
 
 echo "📊 Configuración de base de datos:"
 echo "   Host: $POSTGRES_HOST"
 echo "   Database: $POSTGRES_DB"
 echo "   User: $POSTGRES_USER"
+echo "   Port: ${POSTGRES_PORT:-5432}"
 
 # Función para ejecutar SQL
 execute_sql() {
@@ -42,7 +75,7 @@ execute_sql() {
     if [ -f "$file" ]; then
         PGPASSWORD=$POSTGRES_PASSWORD psql \
             -h $POSTGRES_HOST \
-            -p $POSTGRES_PORT \
+            -p ${POSTGRES_PORT:-5432} \
             -U $POSTGRES_USER \
             -d $POSTGRES_DB \
             -f "$file"
@@ -56,7 +89,7 @@ execute_sql() {
 echo "🔗 Verificando conexión a base de datos..."
 PGPASSWORD=$POSTGRES_PASSWORD psql \
     -h $POSTGRES_HOST \
-    -p $POSTGRES_PORT \
+    -p ${POSTGRES_PORT:-5432} \
     -U $POSTGRES_USER \
     -d $POSTGRES_DB \
     -c "SELECT version();" > /dev/null
@@ -75,7 +108,7 @@ backup_file="backup_production_${timestamp}.sql"
 
 PGPASSWORD=$POSTGRES_PASSWORD pg_dump \
     -h $POSTGRES_HOST \
-    -p $POSTGRES_PORT \
+    -p ${POSTGRES_PORT:-5432} \
     -U $POSTGRES_USER \
     -d $POSTGRES_DB \
     --schema-only \
@@ -87,7 +120,9 @@ echo "   📁 Backup guardado como: $backup_file"
 echo "📥 Aplicando migraciones..."
 
 # 1. Configuración básica de base de datos
-execute_sql "scripts/init_database.sql" "inicialización de base de datos"
+if [ -f "scripts/init_database.sql" ]; then
+    execute_sql "scripts/init_database.sql" "inicialización de base de datos"
+fi
 
 # 2. Tablas de métricas y conversaciones (CRÍTICO)
 execute_sql "scripts/create_metrics_tables.sql" "tablas de conversaciones y métricas"
@@ -104,7 +139,7 @@ echo "✅ Verificando migración..."
 
 PGPASSWORD=$POSTGRES_PASSWORD psql \
     -h $POSTGRES_HOST \
-    -p $POSTGRES_PORT \
+    -p ${POSTGRES_PORT:-5432} \
     -U $POSTGRES_USER \
     -d $POSTGRES_DB \
     -c "
