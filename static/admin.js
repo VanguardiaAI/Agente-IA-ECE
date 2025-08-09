@@ -355,7 +355,8 @@ function displayKnowledgeDocuments(documents) {
 
 async function editDocument(filename) {
     try {
-        const doc = await fetchAPI(`/api/admin/knowledge/document/${filename}`);
+        // Añadir timestamp para evitar cache del navegador
+        const doc = await fetchAPI(`/api/admin/knowledge/document/${filename}?t=${Date.now()}`);
         currentDocument = filename;
         
         document.getElementById('docTitle').value = doc.title;
@@ -414,6 +415,17 @@ async function saveDocument() {
         bootstrap.Modal.getInstance(document.getElementById('documentModal')).hide();
         await loadKnowledgeDocuments();
         
+        // Si estamos editando un documento existente, refrescar su contenido
+        if (currentDocument) {
+            try {
+                const updatedDoc = await fetchAPI(`/api/admin/knowledge/document/${currentDocument}?t=${Date.now()}`);
+                // Actualizar variables globales si las hay para evitar cache
+                console.log(`Documento ${currentDocument} actualizado en cache`);
+            } catch (error) {
+                console.warn('No se pudo refrescar el cache del documento:', error);
+            }
+        }
+        
     } catch (error) {
         showAlert('danger', 'Error al guardar documento');
     } finally {
@@ -466,6 +478,9 @@ async function fetchAPI(endpoint, options = {}) {
     const response = await fetch(`${API_BASE}${endpoint}`, {
         ...options,
         headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
             ...window.authHeader,
             ...options.headers
         }
