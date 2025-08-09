@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import aiofiles
 
-from services.knowledge_base import knowledge_service
+from services.knowledge_singleton import get_knowledge_service
 from services.admin_auth import get_current_admin
 
 logger = logging.getLogger(__name__)
@@ -156,6 +156,7 @@ async def update_document(
         elif "faqs" in str(file_path):
             doc_type = "faq"
         
+        knowledge_service = await get_knowledge_service()
         success = await knowledge_service.load_markdown_file(file_path, doc_type)
         
         if not success:
@@ -230,6 +231,7 @@ async def create_document(
         elif document.category == "faqs":
             doc_type = "faq"
         
+        knowledge_service = await get_knowledge_service()
         success = await knowledge_service.load_markdown_file(file_path, doc_type)
         
         # Registrar actividad
@@ -312,6 +314,7 @@ async def delete_document(
 async def reload_all_documents(current_admin: dict = Depends(get_current_admin)):
     """Recargar todos los documentos en la base de datos vectorial"""
     try:
+        knowledge_service = await get_knowledge_service()
         results = await knowledge_service.load_all_documents()
         
         # Registrar actividad
@@ -342,6 +345,7 @@ async def search_knowledge(
 ):
     """Buscar en la base de conocimientos"""
     try:
+        knowledge_service = await get_knowledge_service()
         results = await knowledge_service.search_knowledge(query, limit=limit)
         
         return {
