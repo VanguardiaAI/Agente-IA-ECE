@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.incremental_sync import IncrementalSyncService
 from services.woocommerce import WooCommerceService
-from services.database import DatabaseService
+from services.database import HybridDatabaseService as DatabaseService
 from services.embedding_service import EmbeddingService
 from config.settings import settings
 
