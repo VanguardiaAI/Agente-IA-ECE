@@ -32,6 +32,8 @@ from services.webhook_handler import webhook_handler
 from services.conversation_logger import conversation_logger
 from services.whatsapp_webhook_handler import whatsapp_webhook_handler
 from services.whatsapp_360dialog_service import whatsapp_service
+from services.knowledge_base import knowledge_service
+from services.conversation_memory import memory_service
 from config.settings import settings
 
 # FASE 3: Importar agente híbrido
@@ -159,6 +161,18 @@ async def startup_event():
         # Inicializar servicio de embeddings
         await embedding_service.initialize()
         logger.info("✅ Servicio de embeddings inicializado")
+        
+        # Inicializar servicio de knowledge base
+        await knowledge_service.initialize()
+        logger.info("✅ Servicio de knowledge base inicializado")
+        
+        # Inicializar servicio de memoria de conversación
+        await memory_service.initialize()
+        logger.info("✅ Servicio de memoria inicializado")
+        
+        # Inicializar logger de conversaciones
+        await conversation_logger.initialize()
+        logger.info("✅ Logger de conversaciones inicializado")
         
         # FASE 3: Inicializar agente híbrido
         hybrid_agent = HybridCustomerAgent()
@@ -293,6 +307,10 @@ async def get_bot_public_config():
         bot_name = await bot_config_service.get_setting("bot_name", "Eva")
         company_name = await bot_config_service.get_setting("company_name", "El Corte Eléctrico")
         welcome_message = await bot_config_service.get_setting("welcome_message", "Hola, ¿en qué puedo ayudarte hoy?")
+        
+        # Reemplazar "Eva" con el nombre configurado del bot en el mensaje de bienvenida
+        if "Eva" in welcome_message and bot_name != "Eva":
+            welcome_message = welcome_message.replace("Eva", bot_name)
         
         return {
             "bot_name": bot_name,
@@ -769,6 +787,10 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
     try:
         welcome_message = await bot_config_service.get_setting("welcome_message", "Hola, ¿en qué puedo ayudarte hoy?")
         bot_name = await bot_config_service.get_setting("bot_name", "Eva")
+        
+        # Reemplazar "Eva" con el nombre configurado del bot en el mensaje de bienvenida
+        if "Eva" in welcome_message and bot_name != "Eva":
+            welcome_message = welcome_message.replace("Eva", bot_name)
         
         welcome_data = {
             "type": "welcome",

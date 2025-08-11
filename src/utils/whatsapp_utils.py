@@ -28,13 +28,14 @@ def create_whatsapp_link(phone: str = SUPPORT_PHONE, message: Optional[str] = No
     
     return base_url
 
-def format_escalation_message(reason: str = "general", context: Optional[Dict[str, Any]] = None) -> str:
+def format_escalation_message(reason: str = "general", context: Optional[Dict[str, Any]] = None, platform: str = "whatsapp") -> str:
     """
     Formatea el mensaje de escalamiento según el contexto
     
     Args:
         reason: Razón del escalamiento (product_not_found, error, complex_query, etc.)
         context: Contexto adicional (producto buscado, error, etc.)
+        platform: Plataforma de destino (whatsapp o wordpress)
         
     Returns:
         Mensaje formateado para escalamiento
@@ -82,8 +83,20 @@ def format_escalation_message(reason: str = "general", context: Optional[Dict[st
     # Crear enlace de WhatsApp
     wa_link = create_whatsapp_link(message=whatsapp_message)
     
-    # Formatear mensaje completo
-    escalation_msg = f"""
+    # Formatear mensaje completo según plataforma
+    if platform == "wordpress":
+        # Para WordPress, evitar asteriscos y usar formato simple
+        escalation_msg = f"""
+{base_message}.
+
+💬 Un especialista te atenderá personalmente
+👉 {wa_link}
+
+Horario: Lunes a Viernes 9:00-18:00
+"""
+    else:
+        # Para WhatsApp, usar formato con asteriscos
+        escalation_msg = f"""
 {base_message}. 
 
 💬 *Un especialista te atenderá personalmente*
@@ -123,16 +136,25 @@ def should_escalate(query_type: str, error: Optional[Exception] = None, attempts
     
     return query_type in escalate_queries
 
-def format_product_help_footer() -> str:
+def format_product_help_footer(platform: str = "whatsapp") -> str:
     """
     Formatea el pie de mensaje para ayuda con productos
+    
+    Args:
+        platform: Plataforma de destino (whatsapp o wordpress)
     
     Returns:
         Pie de mensaje con enlace de WhatsApp
     """
     wa_link = create_whatsapp_link(message="Hola, necesito ayuda con un producto")
     
-    return f"""
+    if platform == "wordpress":
+        return f"""
+💬 ¿Necesitas ayuda personalizada?
+Chatea con un especialista: {wa_link}
+"""
+    else:
+        return f"""
 💬 *¿Necesitas ayuda personalizada?*
 Chatea con un especialista: {wa_link}
 """

@@ -26,14 +26,8 @@
             this.applyCustomStyles();
             this.restoreState();
             
-            // Auto-open on first visit
-            const autoOpenDelay = parseInt(this.config.autoOpenDelay) * 1000;
-            if (autoOpenDelay > 0 && !localStorage.getItem('eva_chat_seen')) {
-                setTimeout(() => {
-                    this.openChat();
-                    localStorage.setItem('eva_chat_seen', 'true');
-                }, autoOpenDelay);
-            }
+            // Widget always starts closed
+            localStorage.setItem('eva_chat_seen', 'true');
         }
 
         bindEvents() {
@@ -120,9 +114,6 @@
             
             // Show quick replies
             this.showQuickReplies();
-            
-            // Save state
-            localStorage.setItem('eva_chat_open', 'true');
         }
 
         closeChat() {
@@ -130,8 +121,7 @@
             $('#eva-chat-button').fadeIn(300);
             this.isOpen = false;
             
-            // Save state
-            localStorage.setItem('eva_chat_open', 'false');
+            // Don't save closed state - it's the default
         }
 
         restoreState() {
@@ -146,12 +136,6 @@
                 const messagesContainer = $('#eva-messages');
                 messagesContainer.scrollTop(messagesContainer[0].scrollHeight);
             }, 100);
-            
-            // Restore open state
-            const wasOpen = localStorage.getItem('eva_chat_open') === 'true';
-            if (wasOpen) {
-                this.openChat();
-            }
         }
 
         connectWebSocket() {
@@ -317,10 +301,15 @@
             const messagesContainer = $('#eva-messages');
             const messageClass = isUser ? 'eva-user-message' : 'eva-bot-message';
             
-            // For user messages, always escape HTML
-            // For bot messages, check if it contains HTML tags
-            const messageContent = isUser ? this.escapeHtml(content) : 
-                (content.includes('<') && content.includes('>') ? content : this.escapeHtml(content));
+            let messageContent;
+            
+            if (isUser) {
+                // For user messages, always escape HTML
+                messageContent = this.escapeHtml(content);
+            } else {
+                // For bot messages, process formatting
+                messageContent = this.formatBotMessage(content);
+            }
             
             const messageHtml = `
                 <div class="eva-message ${messageClass}">
@@ -377,6 +366,85 @@
                 "'": '&#039;'
             };
             return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        formatBotMessage(content) {
+            // First, check if content already has HTML tags (from WordPress formatting)
+            const hasHtmlTags = /<[a-zA-Z][\s\S]*>/i.test(content);
+            
+            if (hasHtmlTags) {
+                // If it has HTML tags, clean them and convert to simple format
+                // Remove all HTML tags
+                content = content.replace(/<[^>]+>/g, '');
+                
+                // Convert HTML entities
+                content = content.replace(/&nbsp;/g, ' ');
+                content = content.replace(/&quot;/g, '"');
+                content = content.replace(/&apos;/g, "'");
+                content = content.replace(/&lt;/g, '<');
+                content = content.replace(/&gt;/g, '>');
+                content = content.replace(/&amp;/g, '&');
+            }
+            
+            // Clean up asterisks used for bold in WhatsApp
+            content = content.replace(/\*([^*]+)\*/g, '<strong>$1</strong>');
+            
+            // Clean up underscores used for italic
+            content = content.replace(/_([^_]+)_/g, '<em>$1</em>');
+            
+            // Convert WhatsApp links to clickable links
+            content = content.replace(
+                /(https?:\/\/wa\.me\/[^\s]+)/g,
+                '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #25D366; text-decoration: underline;">💬 Contactar por WhatsApp</a>'
+            );
+            
+            // Convert other URLs to clickable links
+            content = content.replace(
+                /(https?:\/\/(?!wa\.me)[^\s]+)/g,
+                '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #007cba; text-decoration: underline;">$1</a>'
+            );
+            
+            // Convert line breaks to <br> tags
+            content = content.replace(/\n/g, '<br>');
+            
+            // Handle lists
+            const lines = content.split('<br>');
+            let inList = false;
+            let formattedLines = [];
+            
+            for (let line of lines) {
+                line = line.trim();
+                
+                // Check if this line is a list item
+                if (line.match(/^[•\-\*]\s/)) {
+                    if (!inList) {
+                        formattedLines.push('<ul style="margin: 10px 0; padding-left: 20px;">');
+                        inList = true;
+                    }
+                    formattedLines.push('<li>' + line.substring(2) + '</li>');
+                } else if (line.match(/^\d+\.\s/)) {
+                    if (!inList) {
+                        formattedLines.push('<ol style="margin: 10px 0; padding-left: 20px;">');
+                        inList = true;
+                    }
+                    formattedLines.push('<li>' + line.replace(/^\d+\.\s/, '') + '</li>');
+                } else {
+                    if (inList) {
+                        formattedLines.push(inList === true ? '</ul>' : '</ol>');
+                        inList = false;
+                    }
+                    if (line) {
+                        formattedLines.push(line);
+                    }
+                }
+            }
+            
+            // Close any open list
+            if (inList) {
+                formattedLines.push(inList === true ? '</ul>' : '</ol>');
+            }
+            
+            return formattedLines.join('<br>');
         }
 
         saveToChatHistory(content, isUser) {

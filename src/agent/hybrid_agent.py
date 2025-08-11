@@ -55,9 +55,9 @@ class HybridCustomerAgent:
     
     def __init__(self):
         self.llm_provider = os.getenv("LLM_PROVIDER", "openai")
-        self.model_name = os.getenv("MODEL_NAME", "gpt-5")
-        self.temperature = float(os.getenv("TEMPERATURE", "0.1"))
-        self.max_tokens = int(os.getenv("MAX_TOKENS", "4000"))
+        self.model_name = os.getenv("MODEL_NAME", "gpt-4o")
+        self.temperature = float(os.getenv("TEMPERATURE", "1.0"))
+        self.max_completion_tokens = int(os.getenv("MAX_TOKENS", "4000"))
         
         # Inicializar LLMs
         self.main_llm = self._initialize_llm()
@@ -95,15 +95,15 @@ class HybridCustomerAgent:
         return ChatOpenAI(
             model=self.model_name,
             temperature=self.temperature,
-            max_tokens=self.max_tokens
+            max_completion_tokens=self.max_completion_tokens
         )
     
     def _initialize_quick_llm(self):
-        """Inicializa un LLM rápido para respuestas simples - usa gpt-5-mini para economía"""
+        """Inicializa un LLM rápido para respuestas simples - usa gpt-4o-mini para economía"""
         return ChatOpenAI(
-            model="gpt-5-mini",
-            temperature=0.1,
-            max_tokens=1500
+            model="gpt-4o-mini",
+            temperature=1.0,
+            max_completion_tokens=1500
         )
     
     async def initialize(self):
@@ -126,7 +126,10 @@ class HybridCustomerAgent:
         # Inicializar sistema multi-agente si está habilitado
         if self.enable_multi_agent:
             try:
-                self.multi_agent_system = CustomerServiceMultiAgent()
+                self.multi_agent_system = CustomerServiceMultiAgent(
+                    bot_name=self.bot_name,
+                    company_name=self.company_name
+                )
                 # Nota: Comentado temporalmente hasta revisar multi_agent_system
                 # await self.multi_agent_system.initialize_mcp_client()
                 self.logger.info("✅ Sistema multi-agente preparado")
@@ -168,7 +171,7 @@ class HybridCustomerAgent:
         
         if should_escalate:
             self.logger.info(f"🔴 Escalamiento detectado: {reason}")
-            return format_escalation_message(reason=reason, context={"suggested_message": suggested_msg})
+            return format_escalation_message(reason=reason, context={"suggested_message": suggested_msg}, platform=platform)
         
         # Actualizar historial
         self.conversation_state.conversation_history.append({
@@ -223,7 +226,7 @@ class HybridCustomerAgent:
         except Exception as e:
             print(f"Error logging conversation: {e}")
         
-        self.logger.info(f"🤖 Eva ({strategy}): {response[:100]}...")
+        self.logger.info(f"🤖 {self.bot_name} ({strategy}): {response[:100]}...")
         
         # Aplicar formateo final según la plataforma
         formatted_response = self._format_for_platform(response, platform)
@@ -259,7 +262,9 @@ ESTRATEGIAS DISPONIBLES:
    - Búsqueda de productos
    - Consultas de pedidos (cuando menciona email o número de pedido)
    - Verificar stock o precios
-   - Cualquier consulta que requiera datos de WooCommerce
+   - Preguntas frecuentes (FAQ) sobre políticas, horarios, envíos, devoluciones
+   - Información de la base de conocimiento de la empresa
+   - Cualquier consulta que requiera datos de WooCommerce o knowledge base
 
 3. multi_agent: Para consultas complejas con múltiples intenciones
    - Ejemplos: "Quiero comprar velas Y consultar mi pedido", consultas con múltiples preguntas
@@ -271,9 +276,10 @@ ESTRATEGIAS DISPONIBLES:
    - Aclaraciones o explicaciones
 
 IMPORTANTE:
+- Si preguntan sobre horarios, políticas, envíos, devoluciones, garantías, usa tool_assisted
 - Si ya se mostraron productos y el usuario pregunta sobre ellos, usa standard_response
 - Si el usuario pide "más información" sobre algo ya mencionado, usa standard_response
-- Solo usa tool_assisted para búsquedas NUEVAS
+- Solo usa tool_assisted para búsquedas NUEVAS o consultas de políticas/FAQ
 
 RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, multi_agent, o standard_response
 """
@@ -284,16 +290,26 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             client = AsyncOpenAI()
             
             response = await client.chat.completions.create(
-                model="gpt-5-mini",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "Eres un experto en análisis de consultas de atención al cliente. Determina la mejor estrategia de respuesta basándote en el tipo y complejidad de la consulta."},
                     {"role": "user", "content": strategy_prompt}
                 ],
-                temperature=0.1,
-                max_tokens=30
+                temperature=1.0,
+                max_completion_tokens=30
             )
             
+            # Validar que tenemos una respuesta válida
+            if not response.choices or not response.choices[0].message.content:
+                print("⚠️ Respuesta vacía de IA, usando fallback")
+                return self._fallback_strategy_selection(message)
+            
             strategy_response = response.choices[0].message.content.strip()
+            
+            # Validar que la respuesta no esté vacía
+            if not strategy_response:
+                print("⚠️ Respuesta vacía de IA después de strip, usando fallback")
+                return self._fallback_strategy_selection(message)
             
             # Limpiar y validar respuesta
             strategy = strategy_response.lower().replace(".", "").replace(",", "").strip()
@@ -333,7 +349,10 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             return "quick_response"
         
         # Consultas que requieren herramientas
-        elif any(keyword in message_lower for keyword in ["pedido", "orden", "producto", "vela", "perfume", "estado", "seguimiento", "busco", "necesito", "precio", "stock"]) or any(char.isdigit() for char in message) or "@" in message:
+        elif any(keyword in message_lower for keyword in ["pedido", "orden", "producto", "vela", "perfume", "estado", "seguimiento", "busco", "necesito", "precio", "stock", 
+                                                          "sobretensiones", "protector", "protección", "diferencial", "magnetotérmico", "cable", "enchufe", 
+                                                          "interruptor", "lámpara", "bombilla", "led", "panel", "luminaria", "detector", "termostato", 
+                                                          "radiador", "calefactor", "ventilador", "potencia", "voltaje", "amperios"]) or any(char.isdigit() for char in message) or "@" in message:
             return "tool_assisted"
         
         # Múltiples intenciones (detectar "y", "también", "además")
@@ -360,7 +379,7 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                     session_id=session_id
                 )
                 if should_escalate:
-                    return format_escalation_message(reason=reason, context={"suggested_message": suggested})
+                    return format_escalation_message(reason=reason, context={"suggested_message": suggested}, platform=platform)
             
             return await self._process_standard_response(message, platform)
     
@@ -368,18 +387,23 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
         """Procesa usando búsqueda híbrida directa y servicios del sistema"""
         
         try:
+            # SIEMPRE buscar en knowledge base primero para contexto RAG
+            knowledge_context = await self._search_knowledge_base(message)
+            
             # Clasificar el tipo de consulta
             query_type = await self._classify_query_type(message)
             self.logger.info(f"📊 Tipo de consulta detectado: {query_type} para mensaje: '{message}'")
             
             if query_type == "product_search":
-                return await self._handle_product_search(message, platform)
+                return await self._handle_product_search(message, platform, knowledge_context)
             elif query_type == "order_inquiry":
-                return await self._handle_order_inquiry(message, platform)
+                return await self._handle_order_inquiry(message, platform, knowledge_context)
             elif query_type == "stock_check":
-                return await self._handle_stock_check(message, platform)
+                return await self._handle_stock_check(message, platform, knowledge_context)
+            elif query_type == "faq_inquiry":
+                return await self._handle_faq_inquiry(message, platform, knowledge_context)
             else:
-                return await self._process_standard_response(message, platform)
+                return await self._process_standard_response(message, platform, knowledge_context)
                 
         except Exception as e:
             self.logger.error(f"Error en procesamiento con herramientas: {e}")
@@ -391,7 +415,7 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                 error_occurred=True
             )
             if should_escalate:
-                return format_escalation_message(reason="technical_error", context={"error": str(e)})
+                return format_escalation_message(reason="technical_error", context={"error": str(e)}, platform=platform)
             return await self._process_standard_response(message, platform)
     
     async def _classify_query_type(self, message: str) -> str:
@@ -410,6 +434,17 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
         if any(keyword in message_lower for keyword in stock_keywords):
             return "stock_check"
         
+        # Preguntas frecuentes / FAQ / Políticas (alta prioridad)
+        faq_keywords = ["horario", "horarios", "abierto", "cerrado", "abren", "cierran",
+                       "devolver", "devolución", "devoluciones", "cambio", "cambios",
+                       "garantía", "garantías", "política", "políticas",
+                       "envío", "envíos", "entrega", "entregas", "cuánto tarda",
+                       "forma de pago", "formas de pago", "pagar", "métodos de pago",
+                       "contacto", "teléfono", "email", "dirección", "dónde están",
+                       "reclamación", "reclamar", "queja"]
+        if any(keyword in message_lower for keyword in faq_keywords):
+            return "faq_inquiry"
+        
         # Búsqueda de productos (más amplio)
         # Si menciona marcas conocidas o categorías de productos
         product_brands = ["gabarron", "ide", "simon", "bticino", "ledvance", "philips", "osram"]
@@ -426,7 +461,7 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
         
         return "general"
     
-    async def _handle_product_search(self, message: str, platform: str = "whatsapp") -> str:
+    async def _handle_product_search(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
         """Maneja búsquedas de productos usando búsqueda híbrida"""
         try:
             self.logger.info(f"🔍 BÚSQUEDA DE PRODUCTOS: '{message}'")
@@ -448,7 +483,8 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                 else:
                     return format_escalation_message(
                         reason="product_not_found",
-                        context={"product_search": message}
+                        context={"product_search": message},
+                        platform=platform
                     )
             
             # Debug: Ver qué tipo de datos estamos recibiendo
@@ -457,6 +493,16 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                 self.logger.info(f"Tipo del primer resultado: {type(results[0])}")
                 if isinstance(results[0], dict):
                     self.logger.info(f"Claves del primer resultado: {results[0].keys()}")
+            
+            # Agregar información relevante de knowledge base si existe
+            additional_info = ""
+            if knowledge_context:
+                # Buscar información específica de envíos, garantías, etc.
+                for doc in knowledge_context:
+                    content = doc.get('content', '').lower()
+                    if any(word in content for word in ['envío', 'envíos', 'entrega', 'garantía', 'devolución', 'cambio']):
+                        additional_info = doc.get('content', '')[:300]  # Primeros 300 caracteres
+                        break
             
             # Formatear respuesta según la plataforma
             if platform == "wordpress":
@@ -504,7 +550,10 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                 
                 # Usar el formateador especializado para WhatsApp
                 response = format_products_for_whatsapp(products, message)
-            
+                
+                # Agregar información adicional de knowledge base si existe
+                if additional_info:
+                    response += f"\n\n💡 *Información útil:*\n{additional_info}"
             
             return response
             
@@ -515,10 +564,11 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             else:
                 return format_escalation_message(
                     reason="technical_error",
-                    context={"error": str(e), "product_search": message}
+                    context={"error": str(e), "product_search": message},
+                    platform=platform
                 )
     
-    async def _handle_order_inquiry(self, message: str, platform: str = "whatsapp") -> str:
+    async def _handle_order_inquiry(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
         """Maneja consultas sobre pedidos usando las herramientas de WooCommerce"""
         try:
             # Extraer posible número de pedido o email
@@ -596,7 +646,7 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                         response += "No tengo información adicional sobre pedidos para ese email.\n\n"
                     
                     response += "Si crees que esto es un error o realizaste el pedido con otro email, por favor contacta con nuestro equipo de soporte:\n\n"
-                    response += "💬 WhatsApp: +34 614 21 81 22\n\n"
+                    response += "💬 WhatsApp: https://wa.me/34614218122\n\n"
                     response += "Ellos podrán ayudarte a localizar tu pedido y proporcionarte la información que necesitas."
                     
                     return response
@@ -670,7 +720,8 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                         # Si no encuentra pedidos, escalar para verificación manual
                         response = f"No encontré pedidos asociados al email {email} en mi sistema.\n\n" + format_escalation_message(
                             reason="order_help",
-                            context={"email": email, "message": "Cliente busca pedidos con su email"}
+                            context={"email": email, "message": "Cliente busca pedidos con su email"},
+                            platform=platform
                         )
                         if platform == "wordpress":
                             from src.utils.wordpress_utils import format_text_response
@@ -681,7 +732,8 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                     self.logger.error(f"Error buscando pedidos: {e}")
                     return format_escalation_message(
                         reason="order_help",
-                        context={"email": email}
+                        context={"email": email},
+                        platform=platform
                     )
             
             # Si tenemos ambos datos, buscar el pedido específico
@@ -690,7 +742,8 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                 email = emails[0]
                 response = f"Buscando el pedido #{order_id} para {email}... Por seguridad, esta consulta requiere verificación adicional.\n\n" + format_escalation_message(
                     reason="order_help",
-                    context={"order_id": order_id, "email": email}
+                    context={"order_id": order_id, "email": email},
+                    platform=platform
                 )
                 if platform == "wordpress":
                     from src.utils.wordpress_utils import format_text_response
@@ -717,10 +770,11 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             self.logger.error(f"Error en consulta de pedidos: {e}")
             return format_escalation_message(
                 reason="order_help",
-                context={"error": str(e)}
+                context={"error": str(e)},
+                platform=platform
             )
     
-    async def _handle_stock_check(self, message: str, platform: str = "whatsapp") -> str:
+    async def _handle_stock_check(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
         """Maneja verificaciones de stock"""
         try:
             # Realizar búsqueda de productos primero
@@ -774,19 +828,84 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             self.logger.error(f"Error verificando stock: {e}")
             return format_escalation_message(
                 reason="stock_error",
-                context={"error": str(e), "query": message}
+                context={"error": str(e), "query": message},
+                platform=platform
             )
+    
+    async def _handle_faq_inquiry(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
+        """Maneja preguntas frecuentes usando la knowledge base"""
+        try:
+            self.logger.info(f"📚 CONSULTA FAQ: '{message}'")
+            
+            # Si no tenemos contexto, buscar en knowledge base
+            if not knowledge_context:
+                knowledge_context = await self._search_knowledge_base(message)
+            
+            if not knowledge_context:
+                # Si no encontramos nada en knowledge base, usar respuesta genérica
+                return await self._process_standard_response(message, platform)
+            
+            # Construir respuesta basada en el contexto encontrado
+            response = ""
+            
+            # Tomar el documento más relevante (el primero)
+            most_relevant = knowledge_context[0]
+            content = most_relevant.get('content', '')
+            
+            # Validar que tenemos contenido
+            if not content or not content.strip():
+                self.logger.warning(f"Empty content in knowledge base for query: '{message}'")
+                return await self._process_standard_response(message, platform)
+            
+            # Formatear respuesta según plataforma
+            if platform == "wordpress":
+                from src.utils.wordpress_utils import format_text_response
+                response = f"<h4>{most_relevant.get('title', 'Información')}</h4>\n"
+                response += f"<p>{content}</p>"
+                
+                # Si hay más documentos relevantes, mencionarlos
+                if len(knowledge_context) > 1:
+                    response += "\n<p><em>También podría interesarte:</em></p>\n<ul>"
+                    for doc in knowledge_context[1:3]:  # Máximo 2 adicionales
+                        response += f"<li>{doc.get('title', 'Información adicional')}</li>"
+                    response += "</ul>"
+                
+                return format_text_response(response, preserve_breaks=True)
+            else:
+                # WhatsApp
+                response = f"📋 *{most_relevant.get('title', 'Información')}*\n\n"
+                response += content
+                
+                # Si hay más documentos relevantes, mencionarlos
+                if len(knowledge_context) > 1:
+                    response += "\n\n💡 _También podría interesarte:_"
+                    for doc in knowledge_context[1:3]:  # Máximo 2 adicionales
+                        response += f"\n• {doc.get('title', 'Información adicional')}"
+                
+                return response
+                
+        except Exception as e:
+            self.logger.error(f"Error en consulta FAQ: {e}")
+            # Fallback a respuesta estándar
+            return await self._process_standard_response(message, platform)
     
     async def _process_quick_response(self, message: str, platform: str = "whatsapp") -> str:
         """Procesa respuestas rápidas para consultas simples"""
         
         quick_prompt = f"""
-Eres Eva, asistente virtual de El Corte Eléctrico.
+Eres {self.bot_name}, asistente virtual de {self.company_name}.
+
+INFORMACIÓN CRÍTICA:
+- NO HAY TIENDA FÍSICA. Somos una tienda exclusivamente online.
+- Tenemos más de 4,500 productos eléctricos online.
+- Web: https://elcorteelectrico.com
+- WhatsApp directo: https://wa.me/34614218122
 
 REGLAS: 
 - Responde en máximo 1-2 frases. Sé amable pero muy breve.
 - NUNCA prometas avisar o notificar al cliente cuando algo esté disponible
 - NO ofrezcas enviar recordatorios o avisos futuros
+- NO INVENTES información que no tengas
 Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
 """
         
@@ -797,6 +916,11 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
             ]
             response = await self.quick_llm.ainvoke(messages)
             
+            # Validar respuesta
+            if not response.content or response.content.strip() == "":
+                self.logger.warning(f"Empty quick response for message: '{message}'")
+                return f"¡Hola! Soy {self.bot_name} y estoy aquí para ayudarte. ¿En qué puedo asistirte hoy?"
+            
             # Formatear respuesta según la plataforma
             if platform == "wordpress":
                 from src.utils.wordpress_utils import format_text_response
@@ -804,8 +928,8 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
             else:
                 return response.content
         except Exception as e:
-            print(f"⚠️ Error en respuesta rápida: {e}")
-            return "¡Hola! Soy Eva y estoy aquí para ayudarte. ¿En qué puedo asistirte hoy? 😊"
+            self.logger.error(f"Error en respuesta rápida: {e}")
+            return f"¡Hola! Soy {self.bot_name} y estoy aquí para ayudarte. ¿En qué puedo asistirte hoy?"
     
     async def _search_knowledge_base(self, query: str) -> List[Dict[str, Any]]:
         """Buscar información relevante en la base de conocimientos"""
@@ -833,11 +957,12 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
             self.logger.error(f"Error buscando en knowledge base: {e}")
             return []
     
-    async def _process_standard_response(self, message: str, platform: str = "whatsapp") -> str:
+    async def _process_standard_response(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
         """Procesa usando el LLM principal con contexto de knowledge base"""
         
-        # Buscar información relevante primero
-        knowledge_context = await self._search_knowledge_base(message)
+        # Si no se pasó contexto, buscar información relevante
+        if not knowledge_context:
+            knowledge_context = await self._search_knowledge_base(message)
         
         # Crear prompt con contexto de knowledge base
         system_prompt = self._create_standard_prompt(message)
@@ -883,12 +1008,13 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
                     valid_messages.append(msg)
             
             if not valid_messages:
-                return "Hola, soy Eva, tu asistente de atención al cliente. ¿En qué puedo ayudarte hoy?"
+                return f"Hola, soy {self.bot_name}, tu asistente de atención al cliente. ¿En qué puedo ayudarte hoy?"
             
             response = await self.main_llm.ainvoke(valid_messages)
             
             # Validar respuesta
             if not response.content or response.content.strip() == "":
+                self.logger.warning(f"Empty response from LLM for message: '{message}' - Using fallback")
                 return self._get_fallback_response(message, platform)
             
             # Formatear respuesta según la plataforma
@@ -907,11 +1033,11 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
         if "hola" in message.lower() or "buenos" in message.lower():
             response = f"¡Hola! Soy {self.bot_name} de {self.company_name}. ¿En qué puedo ayudarte?"
         elif "producto" in message.lower() or "diferencial" in message.lower() or "cable" in message.lower():
-            response = "Tenemos más de 4,000 productos eléctricos. ¿Qué necesitas específicamente?"
+            response = "Tenemos más de 4,500 productos eléctricos. ¿Qué necesitas específicamente?"
         elif "pedido" in message.lower() or "orden" in message.lower():
             response = "Para consultar tu pedido necesito el número de pedido y email."
         else:
-            response = format_escalation_message(reason="general")
+            response = format_escalation_message(reason="general", platform=platform)
         
         # Formatear según plataforma
         if platform == "wordpress":
@@ -934,6 +1060,13 @@ Eres {self.bot_name}, asistente virtual de {self.company_name}. Eres una asisten
 CONTEXTO DE LA CONVERSACIÓN:
 {recent_context}
 
+INFORMACIÓN CRÍTICA DE LA EMPRESA:
+- NO HAY TIENDA FÍSICA. Somos una tienda exclusivamente online.
+- Tenemos más de 4,500 productos eléctricos en nuestro catálogo online.
+- Toda la venta es a través de la web: https://elcorteelectrico.com
+- WhatsApp soporte: +34614218122
+- Link directo WhatsApp: https://wa.me/34614218122
+
 INSTRUCCIONES IMPORTANTES:
 1. RESPONDE DE FORMA NATURAL Y CONVERSACIONAL, no como un robot
 2. Si el usuario pregunta sobre productos YA MOSTRADOS, responde sobre ESOS productos específicos
@@ -944,21 +1077,27 @@ INSTRUCCIONES IMPORTANTES:
 7. NUNCA prometas avisar al cliente cuando algo esté listo o disponible
 8. NO ofrezcas notificaciones, recordatorios o avisos futuros
 9. Si preguntan por disponibilidad futura, sugiere que consulten más adelante o contacten por WhatsApp
+10. NUNCA INVENTES INFORMACIÓN: Si no conoces un dato específico (como el SKU de un producto), di claramente "No tengo esa información específica" y ofrece buscar productos relacionados
+11. NO HAY TIENDA FÍSICA: Si preguntan por la ubicación o si pueden visitar, aclara que somos solo online
+12. Cuando el usuario pida más información sobre un producto específico, SIEMPRE proporciona el enlace del producto si está disponible
 
 INFORMACIÓN DEL CLIENTE:
 - Nombre: {self.conversation_state.context.customer_name or 'Cliente'}
 
 DATOS BÁSICOS DE LA EMPRESA:
-- Especialistas en material eléctrico
+- Especialistas en material eléctrico  
+- Más de 4,500 productos en catálogo
 - Envío gratis > 100€ (península)
 - Precios incluyen IVA (21%)
 - WhatsApp soporte: +34 614 21 81 22
+- Link directo WhatsApp: https://wa.me/34614218122
 - NO INVENTES números de teléfono (como 900) ni emails (como ventas@)
-- Para soporte SIEMPRE usa WhatsApp: +34 614 21 81 22
+- Para soporte SIEMPRE proporciona el link de WhatsApp: https://wa.me/34614218122
+- NO HAY TIENDA FÍSICA - Solo venta online
 
 CONSULTA ACTUAL: {message}
 
-Responde de forma natural, como lo haría un vendedor experto y amable. Si el cliente pregunta sobre productos específicos que ya se mostraron, habla de ESOS productos, no busques otros nuevos.
+Responde de forma natural, como lo haría un vendedor experto y amable. Si el cliente pregunta sobre productos específicos que ya se mostraron, habla de ESOS productos, no busques otros nuevos. Si no tienes información específica sobre algo, sé honesta y dilo claramente.
 """
     
     def _get_recent_context(self) -> List:
@@ -984,7 +1123,7 @@ Responde de forma natural, como lo haría un vendedor experto y amable. Si el cl
         
         summary = "Contexto reciente:\n"
         for msg in recent:
-            role = "Usuario" if msg["role"] == "user" else "Eva"
+            role = "Usuario" if msg["role"] == "user" else self.bot_name
             content = msg["content"][:100] + "..." if len(msg["content"]) > 100 else msg["content"]
             summary += f"- {role}: {content}\n"
         
@@ -1100,31 +1239,19 @@ Responde de forma natural, como lo haría un vendedor experto y amable. Si el cl
                 response = "💬 " + response
             
         elif platform == "wordpress":
-            # Para WordPress, asegurar que hay tags HTML apropiados
-            if not response.startswith('<'):
-                # Si no tiene tags HTML, envolver en párrafos
-                lines = response.split('\n\n')
-                formatted_lines = []
-                
-                for line in lines:
-                    line = line.strip()
-                    if line:
-                        # Detectar si es una lista
-                        if line.startswith('•') or line.startswith('-') or line.startswith('*'):
-                            if not formatted_lines or not formatted_lines[-1].startswith('<ul>'):
-                                formatted_lines.append('<ul>')
-                            formatted_lines.append(f'<li>{line[1:].strip()}</li>')
-                        else:
-                            # Cerrar lista si estábamos en una
-                            if formatted_lines and formatted_lines[-1].endswith('</li>'):
-                                formatted_lines.append('</ul>')
-                            formatted_lines.append(f'<p>{line}</p>')
-                
-                # Cerrar lista si terminamos en una
-                if formatted_lines and formatted_lines[-1].endswith('</li>'):
-                    formatted_lines.append('</ul>')
-                
-                response = '\n'.join(formatted_lines)
+            # Para WordPress, NO agregar tags HTML - el widget los manejará
+            # Solo limpiar asteriscos que pueden venir de otros formatos
+            import re
+            
+            # NO convertir asteriscos a HTML - dejarlos para que el widget los procese
+            # Solo asegurar que el formato sea limpio
+            
+            # Reemplazar múltiples espacios horizontales con uno solo
+            response = re.sub(r'[ \t]+', ' ', response)
+            # Reemplazar más de 2 saltos de línea consecutivos con solo 2
+            response = re.sub(r'\n{3,}', '\n\n', response)
+            # Limpiar espacios al final de las líneas
+            response = re.sub(r' +\n', '\n', response)
         
         return response.strip()
     

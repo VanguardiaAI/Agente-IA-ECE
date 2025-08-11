@@ -30,6 +30,10 @@ class KnowledgeBaseService:
     async def initialize(self):
         """Inicializar el servicio y crear tabla si es necesario"""
         try:
+            # Asegurar que el servicio de embeddings esté inicializado
+            if not self.embedding_service.initialized:
+                await self.embedding_service.initialize()
+            
             await self._create_knowledge_table()
             logger.info("✅ Sistema de Knowledge Base inicializado")
         except Exception as e:
@@ -143,6 +147,9 @@ class KnowledgeBaseService:
                 chunk_doc_id = f"{doc_id}_chunk_{idx}" if total_chunks > 1 else doc_id
                 
                 # Generar embedding
+                if not self.embedding_service.initialized:
+                    await self.embedding_service.initialize()
+                
                 embedding = await self.embedding_service.generate_embedding(
                     f"{title}\n\n{chunk_content}"
                 )
@@ -246,6 +253,9 @@ class KnowledgeBaseService:
         """Buscar en la base de conocimientos usando búsqueda híbrida"""
         try:
             # Generar embedding para la consulta
+            if not self.embedding_service.initialized:
+                await self.embedding_service.initialize()
+            
             query_embedding = await self.embedding_service.generate_embedding(query)
             if not query_embedding:
                 logger.error("Error generando embedding para búsqueda")

@@ -63,7 +63,9 @@ class IntentClassificationResult(BaseModel):
 class CustomerServiceMultiAgent:
     """Sistema multi-agente para atención al cliente"""
     
-    def __init__(self):
+    def __init__(self, bot_name: str = "Eva", company_name: str = "El Corte Eléctrico"):
+        self.bot_name = bot_name
+        self.company_name = company_name
         self.llm_provider = os.getenv("LLM_PROVIDER", "openai")
         self.model_name = os.getenv("MODEL_NAME", "gpt-5")
         self.temperature = float(os.getenv("TEMPERATURE", "0.1"))
@@ -282,13 +284,19 @@ Responde SOLO con un JSON válido con esta estructura:
         last_message = state["messages"][-1].content if state["messages"] else ""
         
         system_prompt = f"""
-Eres Eva de El Corte Eléctrico, especialista en productos eléctricos.
+Eres {self.bot_name} de {self.company_name}, especialista en productos eléctricos.
+
+INFORMACIÓN CRÍTICA:
+- NO HAY TIENDA FÍSICA. Somos una tienda exclusivamente online.
+- Tenemos más de 4,500 productos eléctricos en nuestro catálogo online.
+- Web: https://elcorteelectrico.com
 
 REGLAS CRÍTICAS:
 1. MÁXIMO 2-3 frases en respuestas normales
 2. Solo detalles si los piden EXPLÍCITAMENTE
-3. Si no sabes: "Llama al (+34) 614 21 81 22"
-4. NO inventes información
+3. Si no sabes: "Contacta por WhatsApp: https://wa.me/34614218122"
+4. NO inventes información sobre productos o SKUs
+5. Si piden más info de un producto, incluye el enlace
 
 Cliente: {state.context.customer_name or 'Cliente'}
 Consulta: {last_message}
@@ -344,13 +352,19 @@ Responde BREVE y directo.
         last_message = state["messages"][-1].content if state["messages"] else ""
         
         system_prompt = f"""
-Eres Eva de El Corte Eléctrico, especialista en pedidos.
+Eres {self.bot_name} de {self.company_name}, especialista en pedidos.
+
+INFORMACIÓN CRÍTICA:
+- NO HAY TIENDA FÍSICA. Solo vendemos online.
+- Los pedidos se envían por mensajería.
+- No hay recogida en tienda.
 
 REGLAS:
 1. Responde en 2-3 frases máximo
 2. Para consultar pedidos NECESITAS: número de pedido Y email
 3. Si no tienes ambos datos, pídelos brevemente
-4. Si no puedes ayudar: "Llama al (+34) 614 21 81 22"
+4. Si no puedes ayudar: "Contacta por WhatsApp: https://wa.me/34614218122"
+5. NO inventes información sobre pedidos
 
 Cliente: {state.context.customer_name or 'Cliente'}
 Consulta: {last_message}
@@ -400,14 +414,20 @@ Sé BREVE y directo.
         last_message = state["messages"][-1].content if state["messages"] else ""
         
         system_prompt = f"""
-Eres Eva de El Corte Eléctrico, soporte general.
+Eres {self.bot_name} de {self.company_name}, soporte general.
+
+INFORMACIÓN CRÍTICA:
+- NO HAY TIENDA FÍSICA. Somos 100% online.
+- Más de 4,500 productos eléctricos disponibles.
+- Web: https://elcorteelectrico.com
 
 REGLAS:
 1. Máximo 2-3 frases
 2. Envío gratis > 100€ (península)
 3. Devoluciones: 14 días (30 para profesionales)
-4. Si no sabes: "Llama al (+34) 614 21 81 22"
-5. NO inventes información
+4. Si no sabes: "Contacta por WhatsApp: https://wa.me/34614218122"
+5. NO inventes información ni datos
+6. Si preguntan por ubicación: somos solo online
 
 Cliente: {state.context.customer_name or 'Cliente'}
 
@@ -434,7 +454,7 @@ Responde de manera comprensiva y útil.
         else:
             # Sintetizar múltiples respuestas
             synthesis_prompt = f"""
-Eres Eva, y necesitas sintetizar las siguientes respuestas de agentes especialistas en una respuesta coherente y natural:
+Eres {self.bot_name}, y necesitas sintetizar las siguientes respuestas de agentes especialistas en una respuesta coherente y natural:
 
 RESPUESTAS DE AGENTES:
 {json.dumps(agent_responses, indent=2, ensure_ascii=False)}
@@ -571,12 +591,18 @@ Genera una respuesta final coherente:
     async def _fallback_response(self, message: str) -> str:
         """Respuesta de fallback en caso de error"""
         fallback_prompt = f"""
-Eres Eva, asistente de atención al cliente. El sistema avanzado no está disponible, 
+Eres {self.bot_name}, asistente de atención al cliente de {self.company_name}. El sistema avanzado no está disponible, 
 pero puedes ayudar de manera básica.
+
+INFORMACIÓN IMPORTANTE:
+- NO HAY TIENDA FÍSICA. Somos 100% online.
+- Más de 4,500 productos eléctricos disponibles.
+- Web: https://elcorteelectrico.com
+- WhatsApp directo: https://wa.me/34614218122
 
 Cliente dice: "{message}"
 
-Responde de manera amigable y útil, ofreciendo ayuda general sobre nuestra tienda de velas aromáticas y perfumes.
+Responde de manera amigable y útil, ofreciendo ayuda general sobre nuestra tienda de material eléctrico.
 """
         
         try:

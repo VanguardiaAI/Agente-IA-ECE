@@ -4,7 +4,7 @@ Tags: chatbot, woocommerce, customer-service, ai, chat
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.2
-Stable tag: 2.0.0
+Stable tag: 2.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,6 +81,30 @@ El widget maneja automáticamente las desconexiones y muestra mensajes apropiado
 
 == Changelog ==
 
+= 2.2.2 =
+* Restaurado el código original simplificado para la apertura del widget
+* Corregido problema donde el widget no se abría sin historial previo
+* Eliminados logs de depuración innecesarios
+* Simplificado el código de inicialización
+* El widget ahora funciona correctamente en sesiones nuevas
+
+= 2.2.1 =
+* Corregido problema donde el widget no se abría en sesiones nuevas
+* Mejorado el manejo de inicialización cuando no hay historial previo
+* Agregados logs de depuración para mejor diagnóstico
+* Asegurado que el chat window se oculte correctamente al inicio
+* Mejorado el manejo de errores durante la inicialización
+
+= 2.2.0 =
+* Mejorado el formato de mensajes para WordPress
+* Corregido el renderizado de etiquetas HTML en el widget
+* Enlaces de WhatsApp ahora son clicables correctamente
+* Eliminados asteriscos de formato WhatsApp en el widget
+* Widget ahora siempre inicia cerrado (no auto-apertura)
+* Removida la restauración de estado entre páginas
+* Mejorado el procesamiento de listas y formato de texto
+* Actualizada la función formatBotMessage() para mejor compatibilidad
+
 = 2.0.0 =
 * Nuevo esquema de colores corporativo (verde)
 * Añadido campo para personalizar el nombre del chatbot
@@ -99,6 +123,9 @@ El widget maneja automáticamente las desconexiones y muestra mensajes apropiado
 * Compatible con WooCommerce
 
 == Upgrade Notice ==
+
+= 2.2.0 =
+Importante: El widget ahora no se abre automáticamente. Mejoras significativas en el formato de mensajes y enlaces clicables.
 
 = 1.0.0 =
 Primera versión estable del plugin.

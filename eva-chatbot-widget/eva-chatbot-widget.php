@@ -3,7 +3,7 @@
  * Plugin Name: Eva Chatbot Widget
  * Plugin URI: https://vanguardia.dev/eva-chatbot
  * Description: Widget de chat inteligente para atención al cliente en tiendas WooCommerce
- * Version: 2.1.9
+ * Version: 2.2.2
  * Author: Vanguardia.dev
  * Author URI: https://vanguardia.dev
  * License: GPL v2 or later
@@ -117,7 +117,7 @@ class EvaChatbotWidget {
             'welcomeMessage' => get_option('eva_chatbot_welcome_message', '¡Hola! Soy Eva, tu asistente virtual. ¿En qué puedo ayudarte hoy?'),
             'typingMessage' => get_option('eva_chatbot_typing_message', 'está escribiendo...'),
             'errorMessage' => get_option('eva_chatbot_error_message', 'Error de conexión. Por favor, intenta de nuevo.'),
-            'autoOpenDelay' => get_option('eva_chatbot_auto_open_delay', '3'),
+            'autoOpenDelay' => '0', // Disabled - widget always starts closed
             'quickReplies' => json_decode(get_option('eva_chatbot_quick_replies', '[]'), true),
             'position' => get_option('eva_chatbot_position', 'bottom-right'),
             'primaryColor' => get_option('eva_chatbot_primary_color', '#54841e'),
@@ -231,7 +231,7 @@ class EvaChatbotWidget {
         add_option('eva_chatbot_welcome_message', '¡Hola! Soy Eva, tu asistente virtual. ¿En qué puedo ayudarte hoy?');
         add_option('eva_chatbot_typing_message', 'está escribiendo...');
         add_option('eva_chatbot_error_message', 'Error de conexión. Por favor, intenta de nuevo.');
-        add_option('eva_chatbot_auto_open_delay', '3');
+        add_option('eva_chatbot_auto_open_delay', '0'); // Never auto-open by default
         add_option('eva_chatbot_quick_replies', json_encode(array()));
         add_option('eva_chatbot_position', 'bottom-right');
         add_option('eva_chatbot_display_rules', 'all');

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Eva Widget Connection</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Prueba de Conexión del Widget Eva</h1>
+    
+    <div id="test-results">
+        <h2>Resultados de las pruebas:</h2>
+        <ol id="results-list"></ol>
+    </div>
+    
+    <button id="test-connection">Probar Conexión</button>
+    
+    <script>
+    function addResult(message, success = true) {
+        const color = success ? 'green' : 'red';
+        $('#results-list').append(`<li style="color: ${color}">${message}</li>`);
+    }
+    
+    $('#test-connection').click(async function() {
+        $('#results-list').empty();
+        
+        // 1. Verificar que jQuery esté cargado
+        addResult('jQuery cargado correctamente', true);
+        
+        // 2. Verificar conexión con el servidor
+        const serverUrl = 'http://localhost:8080';
+        
+        try {
+            // Probar endpoint de salud
+            const healthResponse = await fetch(`${serverUrl}/health`);
+            if (healthResponse.ok) {
+                addResult(`Servidor respondiendo en ${serverUrl}/health`, true);
+            } else {
+                addResult(`Error: Servidor devolvió código ${healthResponse.status}`, false);
+            }
+        } catch (error) {
+            addResult(`Error: No se puede conectar al servidor en ${serverUrl} - ${error.message}`, false);
+            addResult('Asegúrate de que el servidor esté ejecutándose: python app.py', false);
+        }
+        
+        // 3. Probar endpoint de chat
+        try {
+            const chatResponse = await fetch(`${serverUrl}/api/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Platform': 'wordpress'
+                },
+                body: JSON.stringify({
+                    message: 'Hola',
+                    user_id: 'test_user',
+                    platform: 'wordpress'
+                })
+            });
+            
+            if (chatResponse.ok) {
+                const data = await chatResponse.json();
+                addResult('Endpoint de chat funcionando correctamente', true);
+                addResult(`Respuesta del servidor: ${data.response.substring(0, 50)}...`, true);
+            } else {
+                addResult(`Error en endpoint de chat: ${chatResponse.status}`, false);
+            }
+        } catch (error) {
+            addResult(`Error al probar endpoint de chat: ${error.message}`, false);
+        }
+        
+        // 4. Verificar WebSocket
+        try {
+            const ws = new WebSocket(`ws://localhost:8080/ws/chat/test_client`);
+            
+            ws.onopen = function() {
+                addResult('WebSocket conectado correctamente', true);
+                ws.close();
+            };
+            
+            ws.onerror = function(error) {
+                addResult('Error en WebSocket: ' + error, false);
+            };
+            
+            ws.onclose = function() {
+                console.log('WebSocket cerrado');
+            };
+            
+            // Timeout para WebSocket
+            setTimeout(() => {
+                if (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CLOSED) {
+                    addResult('Timeout: WebSocket no pudo conectar en 3 segundos', false);
+                    ws.close();
+                }
+            }, 3000);
+            
+        } catch (error) {
+            addResult(`Error al crear WebSocket: ${error.message}`, false);
+        }
+        
+        // 5. Verificar elementos del DOM
+        setTimeout(() => {
+            if ($('#eva-chatbot-widget').length > 0) {
+                addResult('Widget encontrado en el DOM', true);
+                
+                if ($('#eva-chat-button').length > 0) {
+                    addResult('Botón del chat encontrado', true);
+                } else {
+                    addResult('Error: Botón del chat NO encontrado', false);
+                }
+                
+                if ($('#eva-chat-window').length > 0) {
+                    addResult('Ventana del chat encontrada', true);
+                } else {
+                    addResult('Error: Ventana del chat NO encontrada', false);
+                }
+            } else {
+                addResult('Error: Widget NO encontrado en el DOM', false);
+                addResult('Asegúrate de que el plugin esté activado en WordPress', false);
+            }
+        }, 1000);
+    });
+    </script>
+</body>
+</html>

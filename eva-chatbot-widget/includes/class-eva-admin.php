@@ -28,7 +28,7 @@ class Eva_Chatbot_Admin {
         $welcome_message = get_option('eva_chatbot_welcome_message', '¡Hola! Soy Eva, tu asistente virtual. ¿En qué puedo ayudarte hoy?');
         $typing_message = get_option('eva_chatbot_typing_message', 'está escribiendo...');
         $error_message = get_option('eva_chatbot_error_message', 'Error de conexión. Por favor, intenta de nuevo.');
-        $auto_open_delay = get_option('eva_chatbot_auto_open_delay', '3');
+        $auto_open_delay = get_option('eva_chatbot_auto_open_delay', '0'); // Default to never open automatically
         $quick_replies = json_decode(get_option('eva_chatbot_quick_replies', '[]'), true);
         $position = get_option('eva_chatbot_position', 'bottom-right');
         $display_rules = get_option('eva_chatbot_display_rules', 'all');

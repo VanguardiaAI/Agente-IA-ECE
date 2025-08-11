@@ -1,0 +1,15 @@
+# Eva automatic updates - runs at 6:00 AM and 6:00 PM
+# Note: Cron runs in UTC by default in Docker containers
+# Adjust hours based on your timezone needs
+
+# Morning update (6:00 AM local time - adjust for UTC)
+0 6 * * * cd /app && /usr/local/bin/python /app/scripts/auto_update_docker.py >> /app/logs/cron.log 2>&1
+
+# Evening update (6:00 PM local time - adjust for UTC)
+0 18 * * * cd /app && /usr/local/bin/python /app/scripts/auto_update_docker.py >> /app/logs/cron.log 2>&1
+
+# Log rotation - clean logs older than 7 days
+0 0 * * * find /app/logs -name '*.log' -mtime +7 -delete >> /app/logs/cron.log 2>&1
+
+# Health check every 5 minutes
+*/5 * * * * echo "Cron is running at $(date)" >> /app/logs/cron_health.log

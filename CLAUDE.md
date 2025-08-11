@@ -161,6 +161,29 @@ python scripts/test_woocommerce.py
 python scripts/load_knowledge.py
 ```
 
+### Automatic Updates
+The system automatically updates products and knowledge base twice daily:
+
+```bash
+# Setup automatic updates (runs at 6:00 AM and 6:00 PM)
+./scripts/setup_auto_updates.sh
+
+# Check update status
+python scripts/check_update_status.py
+
+# Run update manually
+python scripts/auto_update.py
+
+# View update logs
+tail -f /opt/eva/logs/auto_update_*.log
+```
+
+**Update Schedule:**
+- Morning update: 6:00 AM
+- Evening update: 6:00 PM
+- Logs retained for 7 days
+- Status file: `/opt/eva/logs/update_status.txt`
+
 
 ## WhatsApp Integration (360Dialog)
 

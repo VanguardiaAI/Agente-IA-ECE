@@ -14,12 +14,7 @@
 - **Gestión de devoluciones**: https://elcorteelectrico.com/devoluciones/
 
 ## Tienda Física
-
-### Dirección Principal
-El Corte Eléctrico Soluciones, S.L.
-Calle Laguna de Marquesado 47, Nave D
-28021 Madrid, España
-Teléfono: +34 614 21 81 22
+- **No hay tienda física.**
 
 ## Redes Sociales
 

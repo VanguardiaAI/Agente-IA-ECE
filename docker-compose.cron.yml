@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # Servicio de actualización automática
+  cron-updater:
+    build:
+      context: .
+      dockerfile: docker/cron/Dockerfile
+    container_name: eva-cron-prod
+    restart: always
+    env_file:
+      - .env.production
+    environment:
+      - PYTHONUNBUFFERED=1
+      - POSTGRES_HOST=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-eva_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-eva_db}
+      - TZ=${TZ:-UTC}  # Configura la zona horaria
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./knowledge:/app/knowledge
+      - ./logs:/app/logs
+      - ./scripts:/app/scripts:ro
+    networks:
+      - eva_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

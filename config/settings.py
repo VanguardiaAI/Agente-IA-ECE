@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 # Cargar variables de entorno
 load_dotenv()
+load_dotenv('env.agent')  # Cargar configuración de agentes
 
 # Detectar si estamos en modo desarrollo
 IS_DEVELOPMENT = os.getenv("ENVIRONMENT", "development") == "development"
