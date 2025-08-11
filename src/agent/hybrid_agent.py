@@ -55,7 +55,7 @@ class HybridCustomerAgent:
     
     def __init__(self):
         self.llm_provider = os.getenv("LLM_PROVIDER", "openai")
-        self.model_name = os.getenv("MODEL_NAME", "gpt-4o")
+        self.model_name = os.getenv("MODEL_NAME", "gpt-5")
         self.temperature = float(os.getenv("TEMPERATURE", "1.0"))
         self.max_completion_tokens = int(os.getenv("MAX_TOKENS", "4000"))
         
@@ -99,9 +99,9 @@ class HybridCustomerAgent:
         )
     
     def _initialize_quick_llm(self):
-        """Inicializa un LLM rápido para respuestas simples - usa gpt-4o-mini para economía"""
+        """Inicializa un LLM rápido para respuestas simples - usa gpt-5-mini para economía"""
         return ChatOpenAI(
-            model="gpt-4o-mini",
+            model="gpt-5-mini",
             temperature=1.0,
             max_completion_tokens=1500
         )
@@ -290,7 +290,7 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             client = AsyncOpenAI()
             
             response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5-mini",
                 messages=[
                     {"role": "system", "content": "Eres un experto en análisis de consultas de atención al cliente. Determina la mejor estrategia de respuesta basándote en el tipo y complejidad de la consulta."},
                     {"role": "user", "content": strategy_prompt}
