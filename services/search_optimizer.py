@@ -58,17 +58,22 @@ REGLAS:
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "Eres un experto en análisis de consultas de productos eléctricos. Entiendes sinónimos y variaciones de productos."},
+                    {"role": "system", "content": "Eres un experto en análisis de consultas de productos eléctricos. Entiendes sinónimos y variaciones de productos. SIEMPRE responde en formato JSON válido."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=1,
-                max_completion_tokens=200,
-                response_format={"type": "json_object"}
+                max_completion_tokens=200
             )
             
+            logger.info(f"🔍 Response object: {response}")
+            
             import json
+            if not response.choices:
+                logger.error("No choices in response")
+                raise ValueError("No choices in response")
+                
             content = response.choices[0].message.content
-            logger.info(f"📝 Respuesta raw de IA: {content}")
+            logger.info(f"📝 Respuesta raw de IA: '{content}'")
             
             try:
                 result = json.loads(content)
@@ -120,12 +125,11 @@ Formato: {{"product_ids": ["id1", "id2", "id3", ...]}}
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "Eres un experto en productos eléctricos que ayuda a encontrar exactamente lo que el cliente necesita."},
+                    {"role": "system", "content": "Eres un experto en productos eléctricos que ayuda a encontrar exactamente lo que el cliente necesita. SIEMPRE responde en formato JSON válido."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=1,
-                max_completion_tokens=100,
-                response_format={"type": "json_object"}
+                max_completion_tokens=100
             )
             
             import json
