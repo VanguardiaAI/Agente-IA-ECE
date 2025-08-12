@@ -549,7 +549,8 @@
                     this.socket.send(JSON.stringify({
                         message: message,
                         timestamp: new Date().toISOString(),
-                        client_id: this.clientId
+                        client_id: this.clientId,
+                        platform: 'wordpress'  // Especificar plataforma para formato HTML
                     }));
                 } catch (error) {
                     console.error('Error enviando mensaje:', error);
