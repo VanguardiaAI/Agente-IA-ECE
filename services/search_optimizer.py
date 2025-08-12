@@ -25,31 +25,33 @@ class SearchOptimizer:
         """
         
         prompt = f"""
-Analiza esta consulta de un cliente buscando productos eléctricos y extrae información para optimizar la búsqueda en base de datos.
+Eres un experto en productos eléctricos. Un cliente dice: "{user_query}"
 
-CONSULTA DEL CLIENTE: "{user_query}"
+Tu tarea es entender QUÉ producto está buscando realmente y generar la MEJOR consulta de búsqueda para encontrarlo en una base de datos de productos.
 
-Debes extraer:
-1. search_terms: Lista de términos clave para buscar en la base de datos (sin palabras comunes)
-2. product_type: Tipo principal de producto que busca
-3. specific_features: Características específicas mencionadas (marca, modelo, capacidad, etc)
-4. search_query: La mejor consulta de búsqueda optimizada para encontrar el producto
-5. intent: La intención real del usuario en pocas palabras
+PROCESO DE ANÁLISIS:
+1. Identifica el producto real que busca (no te quedes con las palabras literales)
+2. Piensa en cómo ese producto aparecería en un catálogo de tienda
+3. Genera términos de búsqueda que coincidan con nombres reales de productos
 
-IMPORTANTE:
-- Para "termo eléctrico" debes entender que busca un calentador de agua eléctrico
-- Para "ventilador industrial" debes mantener ambas palabras juntas
-- Si menciona características como "multifix", "80 litros", etc, inclúyelas
-- NO incluyas palabras como "quiero", "busco", "necesito", etc en search_terms
+EJEMPLOS DE ANÁLISIS:
+- "quiero un termo eléctrico" → El cliente busca un CALENTADOR DE AGUA ELÉCTRICO o TERMO ELÉCTRICO (aparato para calentar agua)
+- "necesito un ventilador de pared" → Busca un VENTILADOR DE PARED (no un ventilador de techo ni portátil)
+- "busco un diferencial" → Busca un INTERRUPTOR DIFERENCIAL o DIFERENCIAL (protección eléctrica)
 
-Responde SOLO en formato JSON:
+Para la consulta actual, genera:
 {{
-    "search_terms": ["término1", "término2"],
-    "product_type": "tipo de producto",
-    "specific_features": ["característica1", "característica2"],
-    "search_query": "consulta optimizada completa",
-    "intent": "descripción corta de lo que busca"
+    "search_terms": [lista de palabras clave que aparecerían en el nombre del producto],
+    "product_type": "categoría específica del producto",
+    "specific_features": [características mencionadas como marca, capacidad, etc],
+    "search_query": "la consulta optimizada que buscarías en el catálogo",
+    "intent": "qué producto busca realmente el cliente"
 }}
+
+REGLAS:
+- NO incluyas verbos como quiero/busco/necesito
+- SÍ incluye el nombre real del producto como aparecería en una tienda
+- Si el cliente usa términos coloquiales, tradúcelos al nombre técnico/comercial
 """
 
         try:
@@ -60,7 +62,7 @@ Responde SOLO en formato JSON:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=200,
+                max_completion_tokens=200,
                 response_format={"type": "json_object"}
             )
             
@@ -116,7 +118,7 @@ Formato JSON: {{"product_ids": ["id1", "id2", "id3", ...]}}
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=100,
+                max_completion_tokens=100,
                 response_format={"type": "json_object"}
             )
             
