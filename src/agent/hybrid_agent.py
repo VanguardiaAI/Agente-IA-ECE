@@ -991,8 +991,14 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
             
             # Formatear respuesta según la plataforma
             if platform == "wordpress":
-                from src.utils.wordpress_utils import format_text_response
-                return format_text_response(response.content, preserve_breaks=True)
+                # Si la respuesta ya contiene HTML (generado por la IA), devolverla directamente
+                import re
+                if re.search(r'<[^>]+>', response.content):
+                    return response.content
+                else:
+                    # Si es texto plano, formatearlo
+                    from src.utils.wordpress_utils import format_text_response
+                    return format_text_response(response.content, preserve_breaks=True)
             else:
                 return response.content
         except Exception as e:
@@ -1030,6 +1036,9 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
         
         # Confiar en la decisión de la IA - si llegamos aquí es porque la IA determinó
         # que esta es la mejor estrategia para responder
+        
+        # Guardar la plataforma actual para el prompt
+        self._current_platform = platform
         
         # Si no se pasó contexto, buscar información relevante
         if not knowledge_context:
@@ -1090,8 +1099,14 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
             
             # Formatear respuesta según la plataforma
             if platform == "wordpress":
-                from src.utils.wordpress_utils import format_text_response
-                return format_text_response(response.content, preserve_breaks=True)
+                # Si la respuesta ya contiene HTML (generado por la IA), devolverla directamente
+                import re
+                if re.search(r'<[^>]+>', response.content):
+                    return response.content
+                else:
+                    # Si es texto plano, formatearlo
+                    from src.utils.wordpress_utils import format_text_response
+                    return format_text_response(response.content, preserve_breaks=True)
             else:
                 return response.content
             
@@ -1135,11 +1150,34 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
         # Obtener contexto reciente para mejor comprensión
         recent_context = self._get_recent_context_summary()
         
+        # Determinar formato según plataforma
+        platform = getattr(self, '_current_platform', 'whatsapp')
+        format_instructions = ""
+        
+        if platform == "wordpress":
+            format_instructions = """
+FORMATO PARA WORDPRESS:
+- USA HTML para enlaces: <a href="url">texto</a>
+- NO uses formato Markdown [texto](url)
+- Usa <strong> para negritas, NO asteriscos
+- Usa <br> para saltos de línea si es necesario
+- Los párrafos deben estar en <p> tags
+"""
+        else:
+            format_instructions = """
+FORMATO PARA WHATSAPP:
+- Usa formato Markdown para enlaces: [texto](url)
+- Usa *texto* para negritas
+- Usa saltos de línea normales
+"""
+        
         return f"""
 Eres {self.bot_name}, asistente virtual de {self.company_name}. Eres una asistente conversacional natural.
 
 CONTEXTO DE LA CONVERSACIÓN:
 {recent_context}
+
+{format_instructions}
 
 INFORMACIÓN CRÍTICA DE LA EMPRESA:
 - NO HAY TIENDA FÍSICA. Somos una tienda exclusivamente online.
