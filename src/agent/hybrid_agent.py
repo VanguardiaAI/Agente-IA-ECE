@@ -233,6 +233,78 @@ class HybridCustomerAgent:
         
         return formatted_response
     
+    async def _call_gpt5_responses_api(self, prompt: str, system_prompt: str = "", max_tokens: int = 100) -> Any:
+        """Llama a la Responses API de GPT-5 correctamente"""
+        import aiohttp
+        import json
+        
+        headers = {
+            "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
+            "Content-Type": "application/json"
+        }
+        
+        # Combinar system y user prompt
+        full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+        
+        data = {
+            "model": "gpt-5-mini",
+            "input": full_prompt,
+            "reasoning": {
+                "effort": "minimal"  # Minimal para respuestas rápidas
+            },
+            "text": {
+                "verbosity": "low"  # Respuestas concisas
+            }
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.openai.com/v1/responses",
+                    headers=headers,
+                    json=data
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        self.logger.error(f"Error en Responses API: {response.status} - {error_text}")
+                        # Devolver objeto similar a Chat Completions para compatibilidad
+                        return type('obj', (object,), {
+                            'choices': [type('obj', (object,), {
+                                'message': type('obj', (object,), {'content': ''})
+                            })()]
+                        })()
+                    
+                    result = await response.json()
+                    
+                    # Extraer el contenido de la respuesta GPT-5
+                    content = ''
+                    output = result.get('output', [])
+                    if output and len(output) > 1:
+                        message = output[1]  # El mensaje es el segundo elemento
+                        if message.get('type') == 'message' and message.get('content'):
+                            content_array = message.get('content', [])
+                            if content_array and isinstance(content_array, list):
+                                for content_item in content_array:
+                                    if content_item.get('type') == 'output_text':
+                                        content = content_item.get('text', '')
+                                        break
+                    
+                    # Devolver objeto similar a Chat Completions para compatibilidad
+                    return type('obj', (object,), {
+                        'choices': [type('obj', (object,), {
+                            'message': type('obj', (object,), {'content': content})
+                        })()]
+                    })()
+                    
+        except Exception as e:
+            self.logger.error(f"Error llamando a Responses API: {e}")
+            # Devolver objeto vacío para compatibilidad
+            return type('obj', (object,), {
+                'choices': [type('obj', (object,), {
+                    'message': type('obj', (object,), {'content': ''})
+                })()]
+            })()
+    
     async def _determine_response_strategy(self, message: str) -> str:
         """Determina la estrategia de respuesta usando IA"""
         
@@ -286,21 +358,14 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
 """
 
         try:
-            from openai import AsyncOpenAI
-            
             # Log para debug
             self.logger.info(f"🔍 Determinando estrategia para: '{message[:100]}...'")
             
-            client = AsyncOpenAI()
-            
-            response = await client.chat.completions.create(
-                model="gpt-5-mini",
-                messages=[
-                    {"role": "system", "content": "Eres un experto en análisis de consultas de atención al cliente. Determina la mejor estrategia de respuesta basándote en el tipo y complejidad de la consulta."},
-                    {"role": "user", "content": strategy_prompt}
-                ],
-                temperature=1,
-                max_completion_tokens=50
+            # Usar Responses API para GPT-5
+            response = await self._call_gpt5_responses_api(
+                prompt=strategy_prompt,
+                system_prompt="Eres un experto en análisis de consultas de atención al cliente. Determina la mejor estrategia de respuesta basándote en el tipo y complejidad de la consulta.",
+                max_tokens=50
             )
             
             # Log detallado de la respuesta
@@ -311,14 +376,10 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                 self.logger.warning("⚠️ Respuesta vacía de IA, reintentando...")
                 # Reintentar una vez más
                 await asyncio.sleep(1)
-                response = await client.chat.completions.create(
-                    model="gpt-5-mini",
-                    messages=[
-                        {"role": "system", "content": "Eres un experto en análisis de consultas. Responde SOLO con: quick_response, tool_assisted, multi_agent, o standard_response"},
-                        {"role": "user", "content": f"Clasifica esta consulta: '{message}'"}
-                    ],
-                    temperature=1,
-                    max_completion_tokens=20
+                response = await self._call_gpt5_responses_api(
+                    prompt=f"Clasifica esta consulta: '{message}'",
+                    system_prompt="Eres un experto en análisis de consultas. Responde SOLO con: quick_response, tool_assisted, multi_agent, o standard_response",
+                    max_tokens=20
                 )
             
             strategy_response = response.choices[0].message.content.strip() if response.choices and response.choices[0].message else ""
@@ -448,21 +509,6 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
         """Maneja búsquedas de productos usando búsqueda híbrida con optimización IA"""
         try:
             self.logger.info(f"🔍 BÚSQUEDA DE PRODUCTOS: '{message}'")
-            
-            # Verificar si se refiere a productos mostrados anteriormente
-            message_lower = message.lower()
-            refers_to_previous = any(phrase in message_lower for phrase in [
-                "el más barato", "el mas barato", "más barato", "mas barato",
-                "el más caro", "el mas caro", "más caro", "mas caro",
-                "el primero", "el segundo", "el último", "ese", "esos",
-                "de los que", "que me mostraste", "que me enseñaste"
-            ])
-            
-            if refers_to_previous:
-                # Buscar la última respuesta con productos
-                last_product_response = self._get_last_product_search()
-                if last_product_response:
-                    return await self._handle_product_reference(message, last_product_response, platform)
             
             # Usar el optimizador de búsqueda para analizar la consulta
             from services.search_optimizer import search_optimizer
