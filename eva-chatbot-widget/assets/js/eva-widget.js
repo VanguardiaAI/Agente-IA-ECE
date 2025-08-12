@@ -373,17 +373,9 @@
             const hasHtmlTags = /<[a-zA-Z][\s\S]*>/i.test(content);
             
             if (hasHtmlTags) {
-                // If it has HTML tags, clean them and convert to simple format
-                // Remove all HTML tags
-                content = content.replace(/<[^>]+>/g, '');
-                
-                // Convert HTML entities
-                content = content.replace(/&nbsp;/g, ' ');
-                content = content.replace(/&quot;/g, '"');
-                content = content.replace(/&apos;/g, "'");
-                content = content.replace(/&lt;/g, '<');
-                content = content.replace(/&gt;/g, '>');
-                content = content.replace(/&amp;/g, '&');
+                // If it has HTML tags (like product cards), preserve them!
+                // Only do basic safety cleaning
+                return content;
             }
             
             // Clean up asterisks used for bold in WhatsApp
