@@ -307,27 +307,24 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             self.logger.info(f"📡 Respuesta de OpenAI: {response}")
             
             # Validar que tenemos una respuesta válida
-            if not response.choices:
-                self.logger.warning("⚠️ No hay choices en la respuesta de OpenAI")
-                return self._fallback_strategy_selection(message)
-                
-            if not response.choices[0].message:
-                self.logger.warning("⚠️ No hay message en choices[0]")
-                return self._fallback_strategy_selection(message)
-                
-            if not response.choices[0].message.content:
-                self.logger.warning("⚠️ No hay content en el message")
-                return self._fallback_strategy_selection(message)
+            if not response.choices or not response.choices[0].message or not response.choices[0].message.content:
+                self.logger.warning("⚠️ Respuesta vacía de IA, reintentando...")
+                # Reintentar una vez más
+                await asyncio.sleep(1)
+                response = await client.chat.completions.create(
+                    model="gpt-5-mini",
+                    messages=[
+                        {"role": "system", "content": "Eres un experto en análisis de consultas. Responde SOLO con: quick_response, tool_assisted, multi_agent, o standard_response"},
+                        {"role": "user", "content": f"Clasifica esta consulta: '{message}'"}
+                    ],
+                    temperature=1,
+                    max_completion_tokens=20
+                )
             
-            strategy_response = response.choices[0].message.content.strip()
-            
-            # Validar que la respuesta no esté vacía
-            if not strategy_response:
-                self.logger.warning("⚠️ Respuesta vacía de IA después de strip")
-                return self._fallback_strategy_selection(message)
+            strategy_response = response.choices[0].message.content.strip() if response.choices and response.choices[0].message else ""
             
             # Log de la respuesta original
-            self.logger.info(f"📝 Respuesta original de IA: '{strategy_response}'")
+            self.logger.info(f"📝 Respuesta de IA: '{strategy_response}'")
             
             # Limpiar y validar respuesta
             strategy = strategy_response.lower().replace(".", "").replace(",", "").strip()
@@ -338,36 +335,16 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                 self.logger.info(f"✅ IA recomienda estrategia: {strategy}")
                 return strategy
             else:
-                self.logger.warning(f"⚠️ Estrategia inválida de IA: '{strategy_response}', usando fallback")
-                return self._fallback_strategy_selection(message)
+                self.logger.warning(f"⚠️ Estrategia inválida de IA: '{strategy_response}', usando standard_response")
+                # En lugar de fallback, usar standard_response que permite a la IA procesar con contexto
+                return "standard_response"
                 
         except Exception as e:
             self.logger.error(f"❌ Error en determinación de estrategia IA: {type(e).__name__}: {e}")
-            import traceback
-            self.logger.error(traceback.format_exc())
-            return self._fallback_strategy_selection(message)
+            # En caso de error, usar standard_response para que la IA procese el mensaje
+            return "standard_response"
     
-    def _fallback_strategy_selection(self, message: str) -> str:
-        """Selección de estrategia de respaldo si falla la IA - MÍNIMO sin triggers de productos"""
-        if not message or not message.strip():
-            return "quick_response"
-            
-        message_lower = message.lower().strip()
-        
-        # Manejar mensajes muy largos
-        if len(message) > 2000:
-            return "standard_response"
-        
-        # Manejar mensajes solo con caracteres especiales o emojis
-        if not any(c.isalpha() for c in message):
-            return "standard_response"
-        
-        # Respuestas rápidas SOLO para saludos muy simples
-        if message_lower in ["hola", "buenos días", "buenas tardes", "buenas noches", "gracias", "adiós", "chao"]:
-            return "quick_response"
-        
-        # Por defecto, respuesta estándar para que la IA analice con contexto
-        return "standard_response"
+    # ELIMINADO: _fallback_strategy_selection - La IA siempre debe decidir, no usar fallbacks mecánicos
     
     async def _process_with_multi_agent(self, message: str, platform: str = "whatsapp") -> str:
         """Procesa usando el sistema multi-agente"""
@@ -1197,10 +1174,22 @@ Responde de forma natural, como lo haría un vendedor experto y amable. Si el cl
         recent = self.conversation_state.conversation_history[-6:]  # 3 pares user/assistant
         
         summary = "Contexto reciente:\n"
+        products_shown = False
+        
         for msg in recent:
             role = "Usuario" if msg["role"] == "user" else self.bot_name
-            content = msg["content"][:100] + "..." if len(msg["content"]) > 100 else msg["content"]
-            summary += f"- {role}: {content}\n"
+            content = msg["content"]
+            
+            # Detectar si se mostraron productos
+            if role == self.bot_name and any(phrase in content.lower() for phrase in ["opciones que coinciden", "productos encontrados", "termo eléctrico", "aquí tienes"]):
+                products_shown = True
+                summary += f"- {role}: [MOSTRÓ PRODUCTOS AL USUARIO]\n"
+            else:
+                content_preview = content[:100] + "..." if len(content) > 100 else content
+                summary += f"- {role}: {content_preview}\n"
+        
+        if products_shown:
+            summary += "\nNOTA: Se mostraron productos en la conversación reciente\n"
         
         return summary
     
