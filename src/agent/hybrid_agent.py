@@ -239,7 +239,25 @@ class HybridCustomerAgent:
         # Validar mensaje de entrada
         if not message or not message.strip():
             return "quick_response"
+            
+        # BYPASS TEMPORAL: Usar lógica directa para productos
+        message_lower = message.lower()
         
+        # Lista de palabras clave que indican búsqueda de productos
+        product_keywords = [
+            "quiero", "busco", "necesito", "tienen", "muéstrame", "enséñame",
+            "producto", "precio", "cuánto", "valor",
+            "termo", "ventilador", "diferencial", "cable", "enchufe",
+            "termostato", "radiador", "calefactor", "lámpara", "bombilla",
+            "eléctrico", "electrico"
+        ]
+        
+        # Si detecta producto, usar tool_assisted directamente
+        if any(keyword in message_lower for keyword in product_keywords):
+            self.logger.info(f"🎯 Detección directa de producto, usando tool_assisted")
+            return "tool_assisted"
+        
+        # Para otros casos, continuar con el análisis normal
         # Truncar mensajes muy largos para el análisis
         analysis_message = message[:1000] + "..." if len(message) > 1000 else message
         
@@ -287,6 +305,9 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
         try:
             from openai import AsyncOpenAI
             
+            # Log para debug
+            self.logger.info(f"🔍 Determinando estrategia para: '{message[:100]}...'")
+            
             client = AsyncOpenAI()
             
             response = await client.chat.completions.create(
@@ -299,17 +320,31 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                 max_completion_tokens=50
             )
             
+            # Log detallado de la respuesta
+            self.logger.info(f"📡 Respuesta de OpenAI: {response}")
+            
             # Validar que tenemos una respuesta válida
-            if not response.choices or not response.choices[0].message.content:
-                print("⚠️ Respuesta vacía de IA, usando fallback")
+            if not response.choices:
+                self.logger.warning("⚠️ No hay choices en la respuesta de OpenAI")
+                return self._fallback_strategy_selection(message)
+                
+            if not response.choices[0].message:
+                self.logger.warning("⚠️ No hay message en choices[0]")
+                return self._fallback_strategy_selection(message)
+                
+            if not response.choices[0].message.content:
+                self.logger.warning("⚠️ No hay content en el message")
                 return self._fallback_strategy_selection(message)
             
             strategy_response = response.choices[0].message.content.strip()
             
             # Validar que la respuesta no esté vacía
             if not strategy_response:
-                print("⚠️ Respuesta vacía de IA después de strip, usando fallback")
+                self.logger.warning("⚠️ Respuesta vacía de IA después de strip")
                 return self._fallback_strategy_selection(message)
+            
+            # Log de la respuesta original
+            self.logger.info(f"📝 Respuesta original de IA: '{strategy_response}'")
             
             # Limpiar y validar respuesta
             strategy = strategy_response.lower().replace(".", "").replace(",", "").strip()
@@ -317,14 +352,16 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             # Validar que la estrategia sea válida
             valid_strategies = ["quick_response", "tool_assisted", "multi_agent", "standard_response"]
             if strategy in valid_strategies:
-                print(f"🤖 IA recomienda estrategia: {strategy}")
+                self.logger.info(f"✅ IA recomienda estrategia: {strategy}")
                 return strategy
             else:
-                print(f"⚠️ Estrategia inválida de IA: {strategy_response[:50]}{'...' if len(strategy_response) > 50 else ''}, usando fallback")
+                self.logger.warning(f"⚠️ Estrategia inválida de IA: '{strategy_response}', usando fallback")
                 return self._fallback_strategy_selection(message)
                 
         except Exception as e:
-            print(f"⚠️ Error en determinación de estrategia IA: {e}")
+            self.logger.error(f"❌ Error en determinación de estrategia IA: {type(e).__name__}: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return self._fallback_strategy_selection(message)
     
     def _fallback_strategy_selection(self, message: str) -> str:
