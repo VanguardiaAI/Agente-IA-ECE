@@ -45,7 +45,8 @@ async def update_products():
         db_service = DatabaseService()  # No parameters needed
         await db_service.initialize()
         
-        embedding_service = EmbeddingService(settings.OPENAI_API_KEY)
+        embedding_service = EmbeddingService()  # No parameters needed
+        await embedding_service.initialize()
         
         sync_service = IncrementalSyncService(
             woo_service=woo_service,
