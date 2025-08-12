@@ -68,11 +68,7 @@ async def update_products():
             raise Exception("PostgreSQL is not available")
         
         # Initialize services
-        woo_service = WooCommerceService(
-            url=settings.WOOCOMMERCE_URL,
-            consumer_key=settings.WOOCOMMERCE_CONSUMER_KEY,
-            consumer_secret=settings.WOOCOMMERCE_CONSUMER_SECRET
-        )
+        woo_service = WooCommerceService()  # No parameters needed
         
         db_service = DatabaseService()  # No parameters needed
         await db_service.initialize()

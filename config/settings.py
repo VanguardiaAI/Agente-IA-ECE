@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     
     # Configuración de WooCommerce
+    WOOCOMMERCE_URL: Optional[str] = None  # Alias for compatibility
     WOOCOMMERCE_API_URL: Optional[str] = "https://demo.woocommerce.com/wp-json/wc/v3" if IS_DEVELOPMENT else None
     WOOCOMMERCE_CONSUMER_KEY: Optional[str] = "demo_key" if IS_DEVELOPMENT else None
     WOOCOMMERCE_CONSUMER_SECRET: Optional[str] = "demo_secret" if IS_DEVELOPMENT else None
@@ -74,9 +75,12 @@ class Settings(BaseSettings):
     WHATSAPP_ORDER_CONFIRMATION_TEMPLATE: str = "order_confirmation"
     WHATSAPP_WELCOME_TEMPLATE: str = "welcome_message"
     
-    @field_validator('WOOCOMMERCE_API_URL')
+    @field_validator('WOOCOMMERCE_API_URL', mode='before')
     @classmethod
-    def validate_woocommerce_url(cls, v):
+    def validate_woocommerce_url(cls, v, info):
+        # Si no hay WOOCOMMERCE_API_URL, usar WOOCOMMERCE_URL
+        if not v and 'WOOCOMMERCE_URL' in info.data:
+            v = info.data['WOOCOMMERCE_URL']
         if v and not v.startswith(('http://', 'https://')):
             raise ValueError('WOOCOMMERCE_API_URL debe comenzar con http:// o https://')
         return v.rstrip('/') if v else v
