@@ -1041,8 +1041,18 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
         
         # Formatear según plataforma
         if platform == "wordpress":
-            from src.utils.wordpress_utils import format_text_response
-            return format_text_response(response, preserve_breaks=True)
+            # Verificar si la respuesta contiene productos con formato markdown
+            import re
+            has_product_links = bool(re.search(r'\[.*?\]\(https?://.*?\)', response))
+            
+            if has_product_links:
+                # Convertir markdown de productos a HTML
+                from src.utils.wordpress_utils import convert_markdown_products_to_html
+                return convert_markdown_products_to_html(response)
+            else:
+                # Respuesta normal sin productos
+                from src.utils.wordpress_utils import format_text_response
+                return format_text_response(response, preserve_breaks=True)
         else:
             return response
     

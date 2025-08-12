@@ -205,6 +205,43 @@ def format_order_info_response(order: Dict[str, Any]) -> str:
     return html
 
 
+def convert_markdown_products_to_html(text: str) -> str:
+    """
+    Convert markdown formatted product listings to HTML.
+    Specifically handles responses that contain product links in markdown format.
+    
+    Args:
+        text: Text with markdown links like [text](url)
+        
+    Returns:
+        HTML formatted text with product styling
+    """
+    import re
+    
+    # Convert markdown links to HTML links with product styling
+    text = re.sub(
+        r'\[([^\]]+)\]\(([^)]+)\)',
+        r'<a href="\2" class="eva-product-link" style="display: inline-block; background: #54841e; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: 500; margin: 4px 0;">\1</a>',
+        text
+    )
+    
+    # Convert bold text
+    text = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', text)
+    
+    # Convert line breaks
+    text = text.replace('\n\n', '</p><p style="margin: 8px 0;">')
+    text = text.replace('\n', '<br>')
+    
+    # Wrap in paragraph if not already
+    if not text.startswith('<p'):
+        text = f'<p style="margin: 0; line-height: 1.5;">{text}</p>'
+    
+    # Style any lists that might be present
+    text = re.sub(r'<br>[-•]\s+', r'<br>• ', text)
+    
+    return text
+
+
 def format_text_response(text: str, preserve_breaks: bool = True) -> str:
     """
     Format plain text response for WordPress display.
