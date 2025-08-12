@@ -765,11 +765,11 @@ class HybridDatabaseService:
             'precinto': ['bridas', 'cintillos', 'fleje', 'chincho', 'abrazadera'],
             'precintos': ['bridas', 'cintillos', 'fleje', 'chincho', 'abrazadera'],
             
-            # Termos
-            'termos': ['calentador de agua'],
-            'termo': ['calentador de agua'],
-            'calentador de agua': ['termo', 'termos'],
-            'calentadores de agua': ['termos'],
+            # Termos - NO confundir con calderas
+            'termos': ['termo eléctrico'],
+            'termo': ['termo eléctrico'],
+            'termo eléctrico': ['termo', 'termos'],
+            'termo electrico': ['termo', 'termos'],
             
             # Toalleros
             'toalleros': ['secatoallas', 'radiador toallero'],
@@ -778,11 +778,10 @@ class HybridDatabaseService:
             'radiador toallero': ['toallero', 'secatoallas'],
             'radiadores toallero': ['toalleros', 'secatoallas'],
             
-            # Calderas
-            'calderas': ['calentador'],
-            'caldera': ['calentador'],
-            'calentador': ['caldera'],
-            'calentadores': ['calderas'],
+            # Calderas - Sistema de calefacción, NO confundir con termos
+            'calderas': ['caldera eléctrica', 'caldera electrica'],
+            'caldera': ['caldera eléctrica', 'caldera electrica'],
+            # NO incluir calentador como sinónimo de caldera
             
             # Termoventilador
             'termoventilador': ['estufa con ventilador', 'calentador con ventilador'],

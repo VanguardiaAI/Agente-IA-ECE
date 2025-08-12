@@ -29,27 +29,25 @@ class SearchOptimizer:
         prompt = f"""
 Un cliente dice: "{user_query}"
 
-INSTRUCCIONES IMPORTANTES:
-1. CORRIGE errores ortográficos (ej: "temro" → "termo", "electrico" → "eléctrico")
-2. IDENTIFICA el producto real que busca
-3. GENERA términos de búsqueda que coincidan con nombres de catálogo
+ANALIZA qué producto busca y devuelve los términos EXACTOS para encontrarlo.
 
-TRADUCCIONES CLAVE:
-- "termo eléctrico" = CALENTADOR DE AGUA ELÉCTRICO (aparato para calentar agua)
-- "diferencial" = INTERRUPTOR DIFERENCIAL
-- "ventilador" = VENTILADOR (NO confundir con otros productos eléctricos)
+IMPORTANTE:
+- Si dice "termo eléctrico": busca productos que contengan "termo" en el título
+- NO traduzcas "termo" a "calentador" si el usuario dijo "termo"
+- CORRIGE typos: "temro" → "termo", "electrico" → "eléctrico"
 
 Devuelve JSON:
 {{
-    "search_terms": ["calentador", "agua", "termo"],
-    "product_type": "calentador de agua",
-    "search_query": "calentador agua termo"
+    "search_terms": ["termo", "eléctrico"],
+    "product_type": "termo eléctrico",
+    "search_query": "termo eléctrico"
 }}
 
 REGLAS:
-- NO incluir saludos ni verbos (hola/quiero/busco/necesito)
-- SOLO términos del producto
-- Si dice "termo" SIEMPRE incluir "calentador agua"
+- USA las palabras EXACTAS del usuario (corrigiendo solo typos)
+- NO incluir saludos ni verbos (hola/quiero/busco)
+- Si dice "termo", busca "termo" NO "calentador"
+- Si dice "calentador", busca "calentador"
 """
 
         try:
