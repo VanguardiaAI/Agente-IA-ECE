@@ -43,7 +43,7 @@ async def wait_for_postgres():
     
     for i in range(max_retries):
         try:
-            db_service = DatabaseService(settings.DATABASE_URL)
+            db_service = DatabaseService()  # No parameters needed
             await db_service.initialize()
             await db_service.close()
             logger.info("PostgreSQL is ready!")
@@ -74,7 +74,7 @@ async def update_products():
             consumer_secret=settings.WOOCOMMERCE_CONSUMER_SECRET
         )
         
-        db_service = DatabaseService(settings.DATABASE_URL)
+        db_service = DatabaseService()  # No parameters needed
         await db_service.initialize()
         
         embedding_service = EmbeddingService(settings.OPENAI_API_KEY)
