@@ -159,6 +159,39 @@ class HybridCustomerAgent:
         start_time = datetime.now()
         print(f"\n👤 Usuario ({user_id}) [{platform}]: {message}")
         
+        # INTERCEPTOR DIRECTO DE PRODUCTOS - MÁXIMA PRIORIDAD
+        message_lower = message.lower()
+        direct_product_keywords = [
+            "quiero un", "busco un", "necesito un", "tienen", 
+            "termo", "ventilador", "diferencial", "cable", "enchufe",
+            "eléctrico", "electrico", "precio de", "cuánto cuesta"
+        ]
+        
+        if any(keyword in message_lower for keyword in direct_product_keywords):
+            self.logger.info(f"🎯 INTERCEPTOR: Búsqueda directa de producto detectada")
+            # Actualizar historial antes de procesar
+            self.conversation_state.conversation_history.append({
+                "role": "user",
+                "content": message,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # Procesar directamente como búsqueda de productos
+            response = await self._process_with_tools(message, platform)
+            
+            # Actualizar historial con respuesta
+            self.conversation_state.conversation_history.append({
+                "role": "assistant",
+                "content": response,
+                "timestamp": datetime.now().isoformat(),
+                "strategy": "tool_assisted"
+            })
+            
+            # Log y retornar
+            self.logger.info(f"🤖 {self.bot_name} (tool_assisted-intercepted): {response[:100]}...")
+            return self._format_for_platform(response, platform)
+        
+        # Si no es producto, continuar con el flujo normal
         # Verificar si debemos escalar antes de procesar
         session_id = self.conversation_state.session_id or f"session_{user_id}"
         previous_response = self.conversation_state.conversation_history[-1]["content"] if self.conversation_state.conversation_history else None
