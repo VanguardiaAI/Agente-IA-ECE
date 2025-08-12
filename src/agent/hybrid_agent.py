@@ -476,9 +476,9 @@ CONSULTA: "{message}"
 
 CATEGORÍAS:
 1. order_inquiry - Consultas sobre pedidos existentes (estado, tracking, factura)
-2. stock_check - Verificación de disponibilidad de productos específicos
-3. faq_inquiry - Preguntas sobre políticas, horarios, envíos, garantías, devoluciones
-4. product_search - Búsqueda de productos nuevos (NO cuando se refiere a productos ya mostrados)
+2. stock_check - SOLO cuando preguntan específicamente por stock/disponibilidad/unidades de un producto concreto
+3. faq_inquiry - Preguntas sobre políticas, horarios, envíos, garantías, devoluciones, tienda física
+4. product_search - Búsqueda de productos ("¿tenéis X?", "busco Y", "quiero Z") - NO es stock_check
 5. general - Cualquier otra consulta
 
 IMPORTANTE:
@@ -843,9 +843,16 @@ Responde SOLO con la categoría: order_inquiry, stock_check, faq_inquiry, produc
             )
     
     async def _handle_stock_check(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
-        """Maneja verificaciones de stock"""
+        """Maneja verificaciones de stock - SOLO cuando preguntan específicamente por disponibilidad"""
+        # Si la pregunta es genérica tipo "¿tenéis X?", redirigir a búsqueda de productos
+        message_lower = message.lower()
+        if any(word in message_lower for word in ["tenéis", "tienen", "venden", "hay", "busco", "quiero"]) and \
+           not any(word in message_lower for word in ["stock", "disponible", "disponibilidad", "unidades"]):
+            # Es una búsqueda de productos, no una verificación de stock
+            return await self._handle_product_search(message, platform, knowledge_context)
+        
         try:
-            # Realizar búsqueda de productos primero
+            # Para verificación real de stock de un producto específico
             embedding = await self.embedding_service.generate_embedding(message)
             
             results = await self.db_service.hybrid_search(
@@ -856,49 +863,51 @@ Responde SOLO con la categoría: order_inquiry, stock_check, faq_inquiry, produc
             )
             
             if not results:
-                response = "No encontré ese producto. ¿Cuál buscas específicamente?"
+                response = "No encontré ese producto. ¿Podrías ser más específico?"
                 if platform == "wordpress":
-                    from src.utils.wordpress_utils import format_text_response
-                    return format_text_response(response, preserve_breaks=True)
+                    return f"<p style='margin: 0; line-height: 1.5;'>{response}</p>"
                 return response
             
-            response = ""
-            
-            for result in results[:2]:  # Solo mostrar 2 primeros
-                title = result.get('title', 'Producto')
-                metadata = result.get('metadata', {})
-                stock_status = metadata.get('stock_status', 'unknown')
-                stock_quantity = metadata.get('stock_quantity', 0)
-                
-                if platform == "wordpress":
-                    if stock_status == 'instock':
-                        if stock_quantity > 0:
-                            response += f"{title} - {stock_quantity} unidades disponibles\n"
-                        else:
-                            response += f"{title} - En stock\n"
-                    else:
-                        response += f"{title} - Sin stock\n"
-                else:
-                    if stock_status == 'instock':
-                        if stock_quantity > 0:
-                            response += f"✅ {title} - {stock_quantity} unidades\n"
-                        else:
-                            response += f"✅ {title} - En stock\n"
-                    else:
-                        response += f"❌ {title} - Sin stock\n"
-            
+            # Formatear respuesta de disponibilidad
             if platform == "wordpress":
-                from src.utils.wordpress_utils import format_text_response
-                return format_text_response(response.strip(), preserve_breaks=True)
-            return response.strip()
+                response = "<div style='margin: 0;'>"
+                for result in results[:2]:
+                    title = result.get('title', 'Producto')
+                    metadata = result.get('metadata', {})
+                    stock_status = metadata.get('stock_status', 'unknown')
+                    permalink = metadata.get('permalink', '')
+                    
+                    if stock_status == 'instock':
+                        status_text = "✅ Disponible"
+                    else:
+                        status_text = "❌ Sin stock"
+                    
+                    response += f"<p style='margin: 0 0 8px 0;'><strong>{title}</strong><br>"
+                    response += f"{status_text}"
+                    if permalink:
+                        response += f" - <a href='{permalink}'>Ver producto</a>"
+                    response += "</p>"
+                
+                response += "</div>"
+                return response
+            else:
+                # WhatsApp
+                response = ""
+                for result in results[:2]:
+                    title = result.get('title', 'Producto')
+                    metadata = result.get('metadata', {})
+                    stock_status = metadata.get('stock_status', 'unknown')
+                    
+                    if stock_status == 'instock':
+                        response += f"✅ *{title}*\nDisponible\n\n"
+                    else:
+                        response += f"❌ *{title}*\nSin stock\n\n"
+                
+                return response.strip()
             
         except Exception as e:
             self.logger.error(f"Error verificando stock: {e}")
-            return format_escalation_message(
-                reason="stock_error",
-                context={"error": str(e), "query": message},
-                platform=platform
-            )
+            return await self._process_standard_response(message, platform)
     
     async def _handle_faq_inquiry(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
         """Maneja preguntas frecuentes usando la knowledge base"""
@@ -1161,6 +1170,7 @@ INSTRUCCIONES IMPORTANTES:
 10. NUNCA INVENTES INFORMACIÓN: Si no conoces un dato específico (como el SKU de un producto), di claramente "No tengo esa información específica" y ofrece buscar productos relacionados
 11. NO HAY TIENDA FÍSICA: Si preguntan por la ubicación o si pueden visitar, aclara que somos solo online
 12. Cuando el usuario pida más información sobre un producto específico, SIEMPRE proporciona el enlace del producto si está disponible
+13. NUNCA menciones cantidades específicas de stock (como "5 unidades"). Solo di "Disponible" o "Sin stock"
 
 INFORMACIÓN DEL CLIENTE:
 - Nombre: {self.conversation_state.context.customer_name or 'Cliente'}
