@@ -240,37 +240,6 @@ class HybridCustomerAgent:
         if not message or not message.strip():
             return "quick_response"
             
-        # Detección mejorada de productos con análisis contextual
-        message_lower = message.lower()
-        
-        # Frases y patrones que indican búsqueda de productos
-        product_patterns = [
-            "quiero un", "busco un", "necesito un", "quiero comprar",
-            "tienen", "muéstrame", "enséñame", "dónde encuentro",
-            "precio de", "cuánto cuesta", "valor de", "oferta de"
-        ]
-        
-        # Términos específicos de productos eléctricos
-        electrical_products = [
-            "termo", "ventilador", "diferencial", "cable", "enchufe",
-            "termostato", "radiador", "calefactor", "lámpara", "bombilla",
-            "interruptor", "magnetotérmico", "automático", "led", "panel",
-            "detector", "sensor", "transformador", "fusible", "regleta"
-        ]
-        
-        # Detectar patrones de búsqueda de productos
-        has_product_pattern = any(pattern in message_lower for pattern in product_patterns)
-        has_electrical_term = any(term in message_lower for term in electrical_products)
-        
-        # Si tiene tanto patrón como término, es muy probable que sea búsqueda de producto
-        if has_product_pattern or has_electrical_term:
-            # Verificar que NO sea una consulta sobre pedidos ya realizados
-            order_indicators = ["mi pedido", "pedido realizado", "número de pedido", "estado de mi"]
-            if not any(indicator in message_lower for indicator in order_indicators):
-                self.logger.info(f"🎯 Búsqueda de producto detectada, usando tool_assisted")
-                return "tool_assisted"
-        
-        # Para otros casos, continuar con el análisis normal
         # Truncar mensajes muy largos para el análisis
         analysis_message = message[:1000] + "..." if len(message) > 1000 else message
         
@@ -308,9 +277,10 @@ ESTRATEGIAS DISPONIBLES:
 
 IMPORTANTE:
 - Si preguntan sobre horarios, políticas, envíos, devoluciones, garantías, usa tool_assisted
-- Si ya se mostraron productos y el usuario pregunta sobre ellos, usa standard_response
+- Si ya se mostraron productos y el usuario pregunta sobre ellos ("el más barato", "el primero", "ese"), usa standard_response
 - Si el usuario pide "más información" sobre algo ya mencionado, usa standard_response
 - Solo usa tool_assisted para búsquedas NUEVAS o consultas de políticas/FAQ
+- Analiza el CONTEXTO completo de la conversación para entender si se refiere a algo previo
 
 RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, multi_agent, o standard_response
 """
@@ -378,7 +348,7 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             return self._fallback_strategy_selection(message)
     
     def _fallback_strategy_selection(self, message: str) -> str:
-        """Selección de estrategia de respaldo si falla la IA"""
+        """Selección de estrategia de respaldo si falla la IA - MÍNIMO sin triggers de productos"""
         if not message or not message.strip():
             return "quick_response"
             
@@ -392,27 +362,12 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
         if not any(c.isalpha() for c in message):
             return "standard_response"
         
-        # Respuestas rápidas
-        if any(greeting in message_lower for greeting in ["hola", "buenos", "buenas", "hi", "hello"]) and len(message_lower.split()) <= 3:
-            return "quick_response"
-        elif any(farewell in message_lower for farewell in ["adiós", "chao", "hasta", "bye", "gracias"]) and len(message_lower.split()) <= 3:
+        # Respuestas rápidas SOLO para saludos muy simples
+        if message_lower in ["hola", "buenos días", "buenas tardes", "buenas noches", "gracias", "adiós", "chao"]:
             return "quick_response"
         
-        # Consultas que requieren herramientas
-        elif any(keyword in message_lower for keyword in ["pedido", "orden", "producto", "vela", "perfume", "estado", "seguimiento", "busco", "necesito", "precio", "stock", 
-                                                          "sobretensiones", "protector", "protección", "diferencial", "magnetotérmico", "cable", "enchufe", 
-                                                          "interruptor", "lámpara", "bombilla", "led", "panel", "luminaria", "detector", "termostato", "termo",
-                                                          "radiador", "calefactor", "ventilador", "potencia", "voltaje", "amperios", "quiero", "tienen", 
-                                                          "muéstrame", "enséñame", "dónde", "cuánto", "cuál", "eléctrico", "electrico"]) or any(char.isdigit() for char in message) or "@" in message:
-            return "tool_assisted"
-        
-        # Múltiples intenciones (detectar "y", "también", "además")
-        elif any(connector in message_lower for connector in [" y ", " también", " además", " pero"]) and len(message_lower.split()) > 10:
-            return "multi_agent"
-        
-        # Por defecto, respuesta estándar
-        else:
-            return "standard_response"
+        # Por defecto, respuesta estándar para que la IA analice con contexto
+        return "standard_response"
     
     async def _process_with_multi_agent(self, message: str, platform: str = "whatsapp") -> str:
         """Procesa usando el sistema multi-agente"""
@@ -516,6 +471,21 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
         """Maneja búsquedas de productos usando búsqueda híbrida con optimización IA"""
         try:
             self.logger.info(f"🔍 BÚSQUEDA DE PRODUCTOS: '{message}'")
+            
+            # Verificar si se refiere a productos mostrados anteriormente
+            message_lower = message.lower()
+            refers_to_previous = any(phrase in message_lower for phrase in [
+                "el más barato", "el mas barato", "más barato", "mas barato",
+                "el más caro", "el mas caro", "más caro", "mas caro",
+                "el primero", "el segundo", "el último", "ese", "esos",
+                "de los que", "que me mostraste", "que me enseñaste"
+            ])
+            
+            if refers_to_previous:
+                # Buscar la última respuesta con productos
+                last_product_response = self._get_last_product_search()
+                if last_product_response:
+                    return await self._handle_product_reference(message, last_product_response, platform)
             
             # Usar el optimizador de búsqueda para analizar la consulta
             from services.search_optimizer import search_optimizer
