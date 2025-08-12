@@ -55,7 +55,7 @@ async def update_products():
         )
         
         # Run synchronization
-        result = await sync_service.sync_products()
+        result = await sync_service.sync_incremental()
         
         logger.info(f"Product sync completed: {result}")
         logger.info(f"Added: {result['added']}, Updated: {result['updated']}, "

@@ -973,6 +973,12 @@ class HybridDatabaseService:
         
         return unique_terms
     
+    async def get_pool(self):
+        """Obtener el pool de conexiones para uso directo"""
+        if not self.initialized or not self.pool:
+            await self.initialize()
+        return self.pool
+    
     async def close(self):
         """Cerrar el pool de conexiones"""
         if self.pool:
