@@ -290,13 +290,13 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             client = AsyncOpenAI()
             
             response = await client.chat.completions.create(
-                model="gpt-5-mini",
+                model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": "Eres un experto en análisis de consultas de atención al cliente. Determina la mejor estrategia de respuesta basándote en el tipo y complejidad de la consulta."},
                     {"role": "user", "content": strategy_prompt}
                 ],
-                temperature=1.0,
-                max_completion_tokens=30
+                temperature=0.1,
+                max_completion_tokens=50
             )
             
             # Validar que tenemos una respuesta válida
@@ -351,8 +351,9 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
         # Consultas que requieren herramientas
         elif any(keyword in message_lower for keyword in ["pedido", "orden", "producto", "vela", "perfume", "estado", "seguimiento", "busco", "necesito", "precio", "stock", 
                                                           "sobretensiones", "protector", "protección", "diferencial", "magnetotérmico", "cable", "enchufe", 
-                                                          "interruptor", "lámpara", "bombilla", "led", "panel", "luminaria", "detector", "termostato", 
-                                                          "radiador", "calefactor", "ventilador", "potencia", "voltaje", "amperios"]) or any(char.isdigit() for char in message) or "@" in message:
+                                                          "interruptor", "lámpara", "bombilla", "led", "panel", "luminaria", "detector", "termostato", "termo",
+                                                          "radiador", "calefactor", "ventilador", "potencia", "voltaje", "amperios", "quiero", "tienen", 
+                                                          "muéstrame", "enséñame", "dónde", "cuánto", "cuál", "eléctrico", "electrico"]) or any(char.isdigit() for char in message) or "@" in message:
             return "tool_assisted"
         
         # Múltiples intenciones (detectar "y", "también", "además")
@@ -449,8 +450,8 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
         # Si menciona marcas conocidas o categorías de productos
         product_brands = ["gabarron", "ide", "simon", "bticino", "ledvance", "philips", "osram"]
         product_categories = ["ventilador", "calefactor", "lámpara", "bombilla", "interruptor", "enchufe", 
-                            "cable", "led", "panel", "luminaria", "detector", "termostato", "radiador",
-                            "diferencial", "magnetotérmico", "contactor", "relé", "transformador"]
+                            "cable", "led", "panel", "luminaria", "detector", "termostato", "termo", "radiador",
+                            "diferencial", "magnetotérmico", "contactor", "relé", "transformador", "eléctrico", "electrico"]
         product_keywords = ["busco", "necesito", "quiero", "producto", "precio", "cuánto", "oferta", 
                           "descuento", "barato", "económico", "modelo", "referencia", "€", "dpn"]
         
@@ -960,21 +961,33 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
     async def _process_standard_response(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
         """Procesa usando el LLM principal con contexto de knowledge base"""
         
-        # Verificar si es una búsqueda de productos que no fue detectada
+        # SIEMPRE verificar si es una búsqueda de productos antes de usar LLM
         message_lower = message.lower()
-        product_keywords = ["quiero", "busco", "necesito", "tienen", "precio", "costo", "cuánto", 
-                          "comprar", "producto", "artículo", "disponible", "stock", "hay",
-                          "muéstrame", "enséñame", "dame", "opciones", "alternativas",
-                          # Términos eléctricos específicos
-                          "termo", "termostato", "ventilador", "diferencial", "magnetotérmico",
-                          "cable", "enchufe", "interruptor", "lámpara", "led", "bombilla",
-                          "motor", "transformador", "fusible", "relé", "contactor"]
         
-        # Si parece una búsqueda de productos, usar el handler específico
-        if any(keyword in message_lower for keyword in product_keywords):
-            # Verificar que no sea una pregunta sobre un pedido
-            if not any(word in message_lower for word in ["pedido", "orden", "compra realizada", "factura"]):
-                self.logger.info(f"Detectada búsqueda de productos en standard_response: {message}")
+        # Lista extendida de términos que indican búsqueda de productos
+        product_indicators = [
+            # Verbos de búsqueda
+            "quiero", "busco", "necesito", "tienen", "muéstrame", "enséñame", 
+            "dame", "hay", "venden", "ofrecen", "muestren",
+            # Preguntas sobre productos
+            "precio", "costo", "cuánto", "valor", "€",
+            # Términos generales
+            "producto", "artículo", "opciones", "alternativas", "modelos",
+            # Términos eléctricos específicos
+            "termo", "termostato", "ventilador", "diferencial", "magnetotérmico",
+            "cable", "enchufe", "interruptor", "lámpara", "led", "bombilla",
+            "motor", "transformador", "fusible", "relé", "contactor", "timer",
+            "sensor", "detector", "alarma", "sirena", "pulsador", "conmutador",
+            "caja", "tubo", "canaleta", "regleta", "adaptador", "convertidor"
+        ]
+        
+        # Si detecta CUALQUIER indicador de producto, usar búsqueda real
+        if any(indicator in message_lower for indicator in product_indicators):
+            # Verificar que NO sea sobre pedidos ya realizados
+            order_indicators = ["mi pedido", "pedido realizado", "número de pedido", 
+                              "factura", "compra que hice", "ya compré", "mi compra"]
+            if not any(order_ind in message_lower for order_ind in order_indicators):
+                self.logger.info(f"🔍 Redirigiendo a búsqueda de productos desde standard_response: {message}")
                 return await self._handle_product_search(message, platform, knowledge_context)
         
         # Si no se pasó contexto, buscar información relevante
@@ -1049,7 +1062,7 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
         """Respuesta de emergencia cuando todo falla"""
         if "hola" in message.lower() or "buenos" in message.lower():
             response = f"¡Hola! Soy {self.bot_name} de {self.company_name}. ¿En qué puedo ayudarte?"
-        elif "producto" in message.lower() or "diferencial" in message.lower() or "cable" in message.lower():
+        elif any(word in message.lower() for word in ["producto", "diferencial", "cable", "termo", "ventilador", "quiero", "busco", "necesito"]):
             response = "Tenemos más de 4,500 productos eléctricos. ¿Qué necesitas específicamente?"
         elif "pedido" in message.lower() or "orden" in message.lower():
             response = "Para consultar tu pedido necesito el número de pedido y email."
