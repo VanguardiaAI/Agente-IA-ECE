@@ -55,8 +55,8 @@ class HybridCustomerAgent:
     
     def __init__(self):
         self.llm_provider = os.getenv("LLM_PROVIDER", "openai")
-        self.model_name = os.getenv("MODEL_NAME", "gpt-5")
-        self.temperature = float(os.getenv("TEMPERATURE", "1.0"))
+        self.model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")  # Modelo compatible con Chat Completions API
+        self.temperature = float(os.getenv("TEMPERATURE", "0.7"))
         self.max_completion_tokens = int(os.getenv("MAX_TOKENS", "4000"))
         
         # Inicializar LLMs
@@ -99,10 +99,10 @@ class HybridCustomerAgent:
         )
     
     def _initialize_quick_llm(self):
-        """Inicializa un LLM rápido para respuestas simples - usa gpt-5-mini para economía"""
+        """Inicializa un LLM rápido para respuestas simples - usa gpt-4o-mini para economía"""
         return ChatOpenAI(
-            model="gpt-5-mini",
-            temperature=1.0,
+            model="gpt-4o-mini",
+            temperature=0.5,
             max_completion_tokens=1500
         )
     

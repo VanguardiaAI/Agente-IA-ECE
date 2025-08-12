@@ -7,6 +7,8 @@ import os
 from typing import List, Dict, Any, Tuple
 import logging
 from openai import AsyncOpenAI
+import aiohttp
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -25,63 +27,100 @@ class SearchOptimizer:
         """
         
         prompt = f"""
-Eres un experto en productos eléctricos. Un cliente dice: "{user_query}"
+Un cliente de tienda eléctrica dice: "{user_query}"
 
-Tu tarea es entender QUÉ producto está buscando realmente y generar la MEJOR consulta de búsqueda para encontrarlo en una base de datos de productos.
+Analiza qué producto busca realmente. Si dice "termo eléctrico", busca CALENTADORES DE AGUA.
 
-PROCESO DE ANÁLISIS:
-1. Identifica el producto real que busca (no te quedes con las palabras literales)
-2. Piensa en cómo ese producto aparecería en un catálogo de tienda
-3. Genera términos de búsqueda que coincidan con nombres reales de productos
-
-EJEMPLOS DE ANÁLISIS:
-- "quiero un termo eléctrico" → El cliente busca un CALENTADOR DE AGUA ELÉCTRICO o TERMO ELÉCTRICO (aparato para calentar agua)
-- "necesito un ventilador de pared" → Busca un VENTILADOR DE PARED (no un ventilador de techo ni portátil)
-- "busco un diferencial" → Busca un INTERRUPTOR DIFERENCIAL o DIFERENCIAL (protección eléctrica)
-
-Para la consulta actual, genera un JSON con el siguiente formato:
+Devuelve JSON con términos de búsqueda optimizados:
 {{
-    "search_terms": [lista de palabras clave que aparecerían en el nombre del producto],
-    "product_type": "categoría específica del producto",
-    "specific_features": [características mencionadas como marca, capacidad, etc],
-    "search_query": "la consulta optimizada que buscarías en el catálogo",
-    "intent": "qué producto busca realmente el cliente"
+    "search_terms": ["calentador", "agua", "termo"],
+    "product_type": "calentador de agua",
+    "search_query": "calentador agua termo"
 }}
 
 REGLAS:
-- NO incluyas verbos como quiero/busco/necesito
-- SÍ incluye el nombre real del producto como aparecería en una tienda
-- Si el cliente usa términos coloquiales, tradúcelos al nombre técnico/comercial
+- NO incluir verbos (quiero/busco/necesito)
+- SÍ incluir nombre del producto como aparecería en catálogo
+- "termo eléctrico" = calentador de agua eléctrico
+- "diferencial" = interruptor diferencial
 """
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "Eres un experto en análisis de consultas de productos eléctricos. Entiendes sinónimos y variaciones de productos. SIEMPRE responde en formato JSON válido."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=1,
-                max_completion_tokens=200
-            )
+            # Usar la Responses API para GPT-5
+            headers = {
+                "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
+                "Content-Type": "application/json"
+            }
             
-            logger.info(f"🔍 Response object: {response}")
+            data = {
+                "model": self.model,
+                "input": prompt,
+                "reasoning": {
+                    "effort": "minimal"  # Usar mínimo esfuerzo para respuestas rápidas
+                },
+                "text": {
+                    "verbosity": "low"  # Respuestas concisas
+                }
+            }
             
-            import json
-            if not response.choices:
-                logger.error("No choices in response")
-                raise ValueError("No choices in response")
-                
-            content = response.choices[0].message.content
-            logger.info(f"📝 Respuesta raw de IA: '{content}'")
-            
-            try:
-                result = json.loads(content)
-                logger.info(f"✅ Análisis de búsqueda: {result}")
-                return result
-            except json.JSONDecodeError as e:
-                logger.error(f"Error parseando JSON: {e}, Content: {content}")
-                raise
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.openai.com/v1/responses",
+                    headers=headers,
+                    json=data
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"Error en API: {response.status} - {error_text}")
+                        raise ValueError(f"API error: {response.status}")
+                    
+                    result = await response.json()
+                    logger.info(f"🔍 Response object: {result}")
+                    
+                    # Extraer el contenido de la respuesta GPT-5
+                    content = ''
+                    output = result.get('output', [])
+                    if output and len(output) > 1:
+                        message = output[1]  # El mensaje es el segundo elemento
+                        if message.get('type') == 'message' and message.get('content'):
+                            content_array = message.get('content', [])
+                            if content_array and isinstance(content_array, list):
+                                # Extraer el texto del primer elemento de contenido
+                                for content_item in content_array:
+                                    if content_item.get('type') == 'output_text':
+                                        content = content_item.get('text', '')
+                                        break
+                    
+                    logger.info(f"📝 Respuesta de IA: '{content[:200]}...' (truncada)" if len(content) > 200 else f"📝 Respuesta de IA: '{content}'")
+                    
+                    if not content:
+                        logger.warning("Respuesta vacía, usando fallback")
+                        raise ValueError("Empty response")
+                    
+                    try:
+                        # Intentar parsear como JSON
+                        parsed = json.loads(content)
+                        
+                        # Asegurar que tiene la estructura esperada
+                        return {
+                            "search_terms": parsed.get("search_terms", user_query.lower().split()),
+                            "product_type": parsed.get("product_type", "producto"),
+                            "specific_features": parsed.get("specific_features", []),
+                            "search_query": parsed.get("search_query", user_query),
+                            "intent": parsed.get("intent", f"buscar {parsed.get('product_type', 'producto')}")
+                        }
+                    except json.JSONDecodeError:
+                        # Si no es JSON, tratar como texto plano
+                        logger.info("Respuesta no es JSON, procesando como texto")
+                        terms = [term.strip() for term in content.split(',') if term.strip()]
+                        
+                        return {
+                            "search_terms": terms if terms else user_query.lower().split(),
+                            "product_type": "producto",
+                            "specific_features": [],
+                            "search_query": ' '.join(terms) if terms else user_query,
+                            "intent": "buscar producto"
+                        }
             
         except Exception as e:
             logger.error(f"Error en análisis de búsqueda: {e}")
@@ -108,54 +147,86 @@ REGLAS:
         prompt = f"""
 El cliente busca: "{user_query}"
 
-Aquí están los productos encontrados:
-{self._format_products_for_analysis(products[:20])}  # Analizar máximo 20
+Productos encontrados:
+{self._format_products_for_analysis(products[:20])}
 
-Selecciona los {limit} productos MÁS RELEVANTES para lo que busca el cliente.
-Considera:
-- Coincidencia exacta con lo que pide
-- Características mencionadas (capacidad, marca, etc)
-- Relevancia real vs coincidencias parciales de palabras
-
-Responde SOLO con un JSON que contenga los IDs de los productos más relevantes en orden de relevancia.
-Formato: {{"product_ids": ["id1", "id2", "id3", ...]}}
+Selecciona los {limit} productos más relevantes.
+Responde con JSON: {{"product_ids": ["id1", "id2", "id3"]}}
 """
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "Eres un experto en productos eléctricos que ayuda a encontrar exactamente lo que el cliente necesita. SIEMPRE responde en formato JSON válido."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=1,
-                max_completion_tokens=100
-            )
+            # Usar la Responses API para GPT-5
+            headers = {
+                "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
+                "Content-Type": "application/json"
+            }
             
-            import json
-            content = response.choices[0].message.content
-            logger.info(f"📝 Respuesta optimización: {content}")
+            data = {
+                "model": self.model,
+                "input": prompt,
+                "reasoning": {
+                    "effort": "minimal"
+                },
+                "text": {
+                    "verbosity": "low"
+                }
+            }
             
-            result = json.loads(content)
-            selected_ids = result.get("product_ids", [])
-            
-            # Reordenar productos según la selección de la IA
-            ordered_products = []
-            for product_id in selected_ids:
-                for product in products:
-                    if str(product.get('id')) == str(product_id) or str(product.get('external_id')) == str(product_id):
-                        ordered_products.append(product)
-                        break
-            
-            # Si no se encontraron todos, agregar los primeros como fallback
-            if len(ordered_products) < limit:
-                for product in products:
-                    if product not in ordered_products:
-                        ordered_products.append(product)
-                        if len(ordered_products) >= limit:
-                            break
-            
-            return ordered_products[:limit]
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.openai.com/v1/responses",
+                    headers=headers,
+                    json=data
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"Error en API: {response.status} - {error_text}")
+                        return products[:limit]
+                    
+                    result = await response.json()
+                    
+                    # Extraer el contenido de la respuesta GPT-5
+                    content = ''
+                    output = result.get('output', [])
+                    if output and len(output) > 1:
+                        message = output[1]
+                        if message.get('type') == 'message' and message.get('content'):
+                            content_array = message.get('content', [])
+                            if content_array and isinstance(content_array, list):
+                                for content_item in content_array:
+                                    if content_item.get('type') == 'output_text':
+                                        content = content_item.get('text', '')
+                                        break
+                    
+                    logger.info(f"📝 Respuesta optimización: {content[:200]}...' (truncada)" if len(content) > 200 else f"📝 Respuesta optimización: {content}")
+                    
+                    if not content:
+                        return products[:limit]
+                    
+                    try:
+                        parsed = json.loads(content)
+                        selected_ids = parsed.get("product_ids", [])
+                        
+                        # Reordenar productos según la selección de la IA
+                        ordered_products = []
+                        for product_id in selected_ids:
+                            for product in products:
+                                if str(product.get('id')) == str(product_id) or str(product.get('external_id')) == str(product_id):
+                                    ordered_products.append(product)
+                                    break
+                        
+                        # Si no se encontraron todos, agregar los primeros como fallback
+                        if len(ordered_products) < limit:
+                            for product in products:
+                                if product not in ordered_products:
+                                    ordered_products.append(product)
+                                    if len(ordered_products) >= limit:
+                                        break
+                        
+                        return ordered_products[:limit]
+                    except json.JSONDecodeError:
+                        logger.error("Error parseando respuesta como JSON")
+                        return products[:limit]
             
         except Exception as e:
             logger.error(f"Error optimizando resultados: {e}")
