@@ -448,7 +448,9 @@
                     };
 
                     this.socket.onmessage = (event) => {
+                        console.log('WebSocket raw message:', event.data);
                         const data = JSON.parse(event.data);
+                        console.log('WebSocket parsed data:', data);
                         this.handleMessage(data);
                     };
 
@@ -593,7 +595,9 @@
                 contentEl.className = 'message-content';
                 
                 // Formatear mensaje con markdown básico
-                contentEl.innerHTML = this.formatMessage(content);
+                const formattedContent = this.formatMessage(content);
+                console.log('addMessage - formatted content preview:', formattedContent.substring(0, 200));
+                contentEl.innerHTML = formattedContent;
                 
                 const timeEl = document.createElement('div');
                 timeEl.className = 'message-time';
