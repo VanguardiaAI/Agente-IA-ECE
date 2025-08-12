@@ -331,28 +331,27 @@ ESTRATEGIAS DISPONIBLES:
    - Ejemplos: "Hola", "Gracias", "Adiós", "Buenos días"
 
 2. tool_assisted: Para cuando necesitas acceder a datos del sistema
-   - Búsqueda de productos
+   - Búsqueda de productos NUEVOS (NO mencionados previamente)
    - Consultas de pedidos (cuando menciona email o número de pedido)
-   - Verificar stock o precios
+   - Verificar stock o precios de productos NO mostrados aún
    - Preguntas frecuentes (FAQ) sobre políticas, horarios, envíos, devoluciones
    - Información de la base de conocimiento de la empresa
-   - Cualquier consulta que requiera datos de WooCommerce o knowledge base
 
 3. multi_agent: Para consultas complejas con múltiples intenciones
    - Ejemplos: "Quiero comprar velas Y consultar mi pedido", consultas con múltiples preguntas
 
-4. standard_response: Para responder preguntas sobre productos ya mostrados o información general
-   - Comparaciones entre productos mencionados
+4. standard_response: Para responder sobre información YA PRESENTADA o disponible en contexto
+   - Selección entre productos ya mostrados ("el más barato", "el primero", "el segundo")
+   - Comparaciones entre productos mencionados previamente
    - Detalles sobre productos ya mostrados
    - Preguntas de seguimiento sobre la conversación
-   - Aclaraciones o explicaciones
+   - Cuando el usuario quiere elegir o preguntar sobre opciones ya presentadas
 
-IMPORTANTE:
-- Si preguntan sobre horarios, políticas, envíos, devoluciones, garantías, usa tool_assisted
-- Si ya se mostraron productos y el usuario pregunta sobre ellos ("el más barato", "el primero", "ese"), usa standard_response
-- Si el usuario pide "más información" sobre algo ya mencionado, usa standard_response
-- Solo usa tool_assisted para búsquedas NUEVAS o consultas de políticas/FAQ
-- Analiza el CONTEXTO completo de la conversación para entender si se refiere a algo previo
+REGLAS CRÍTICAS:
+- Si se mostraron productos y el usuario hace referencia a ellos, USA standard_response
+- Referencias a productos mostrados incluyen: "el más barato", "el primero", "ese", "el de X precio", "quiero el", etc.
+- Solo usa tool_assisted para búsquedas de productos COMPLETAMENTE NUEVOS
+- Analiza TODO el contexto - si hay productos en la conversación reciente, probablemente se refiere a ellos
 
 RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, multi_agent, o standard_response
 """
@@ -463,47 +462,57 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             return await self._process_standard_response(message, platform)
     
     async def _classify_query_type(self, message: str) -> str:
-        """Clasifica el tipo de consulta del usuario"""
-        message_lower = message.lower()
+        """Clasifica el tipo de consulta del usuario usando IA"""
         
-        # Consulta de pedidos (verificar primero porque es más específico)
-        order_keywords = ["pedido", "orden", "compra", "estado", "seguimiento", "envío", "factura", "mis pedidos"]
-        # También detectar si menciona un email (patrón de email)
-        has_email = "@" in message and "." in message.split("@")[-1] if "@" in message else False
-        if any(keyword in message_lower for keyword in order_keywords) or has_email:
-            return "order_inquiry"
+        # Obtener contexto reciente para mejor clasificación
+        recent_context = self._get_recent_context_summary()
         
-        # Verificación de stock (también específico)
-        stock_keywords = ["stock", "disponible", "disponibilidad", "hay", "quedan", "unidades"]
-        if any(keyword in message_lower for keyword in stock_keywords):
-            return "stock_check"
-        
-        # Preguntas frecuentes / FAQ / Políticas (alta prioridad)
-        faq_keywords = ["horario", "horarios", "abierto", "cerrado", "abren", "cierran",
-                       "devolver", "devolución", "devoluciones", "cambio", "cambios",
-                       "garantía", "garantías", "política", "políticas",
-                       "envío", "envíos", "entrega", "entregas", "cuánto tarda",
-                       "forma de pago", "formas de pago", "pagar", "métodos de pago",
-                       "contacto", "teléfono", "email", "dirección", "dónde están",
-                       "reclamación", "reclamar", "queja"]
-        if any(keyword in message_lower for keyword in faq_keywords):
-            return "faq_inquiry"
-        
-        # Búsqueda de productos (más amplio)
-        # Si menciona marcas conocidas o categorías de productos
-        product_brands = ["gabarron", "ide", "simon", "bticino", "ledvance", "philips", "osram"]
-        product_categories = ["ventilador", "calefactor", "lámpara", "bombilla", "interruptor", "enchufe", 
-                            "cable", "led", "panel", "luminaria", "detector", "termostato", "termo", "radiador",
-                            "diferencial", "magnetotérmico", "contactor", "relé", "transformador", "eléctrico", "electrico"]
-        product_keywords = ["busco", "necesito", "quiero", "producto", "precio", "cuánto", "oferta", 
-                          "descuento", "barato", "económico", "modelo", "referencia", "€", "dpn"]
-        
-        if (any(brand in message_lower for brand in product_brands) or
-            any(category in message_lower for category in product_categories) or
-            any(keyword in message_lower for keyword in product_keywords)):
-            return "product_search"
-        
-        return "general"
+        classification_prompt = f"""
+Analiza esta consulta y clasifícala en una de las categorías disponibles.
+
+CONSULTA: "{message}"
+
+{recent_context}
+
+CATEGORÍAS:
+1. order_inquiry - Consultas sobre pedidos existentes (estado, tracking, factura)
+2. stock_check - Verificación de disponibilidad de productos específicos
+3. faq_inquiry - Preguntas sobre políticas, horarios, envíos, garantías, devoluciones
+4. product_search - Búsqueda de productos nuevos (NO cuando se refiere a productos ya mostrados)
+5. general - Cualquier otra consulta
+
+IMPORTANTE:
+- Si el usuario se refiere a productos YA MOSTRADOS en la conversación, NO es product_search
+- Solo clasifica como product_search cuando busca productos NUEVOS
+- Considera el contexto completo de la conversación
+
+Responde SOLO con la categoría: order_inquiry, stock_check, faq_inquiry, product_search o general
+"""
+
+        try:
+            # Usar Responses API para clasificación rápida
+            response = await self._call_gpt5_responses_api(
+                prompt=classification_prompt,
+                system_prompt="Eres un experto en clasificación de consultas de atención al cliente.",
+                max_tokens=20
+            )
+            
+            if response.choices and response.choices[0].message:
+                classification = response.choices[0].message.content.strip().lower()
+                
+                # Validar que sea una categoría válida
+                valid_categories = ["order_inquiry", "stock_check", "faq_inquiry", "product_search", "general"]
+                if classification in valid_categories:
+                    return classification
+                else:
+                    self.logger.warning(f"Categoría inválida de IA: '{classification}', usando 'general'")
+                    return "general"
+            else:
+                return "general"
+                
+        except Exception as e:
+            self.logger.error(f"Error en clasificación con IA: {e}")
+            return "general"
     
     async def _handle_product_search(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
         """Maneja búsquedas de productos usando búsqueda híbrida con optimización IA"""
@@ -1019,34 +1028,8 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
     async def _process_standard_response(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
         """Procesa usando el LLM principal con contexto de knowledge base"""
         
-        # SIEMPRE verificar si es una búsqueda de productos antes de usar LLM
-        message_lower = message.lower()
-        
-        # Lista extendida de términos que indican búsqueda de productos
-        product_indicators = [
-            # Verbos de búsqueda
-            "quiero", "busco", "necesito", "tienen", "muéstrame", "enséñame", 
-            "dame", "hay", "venden", "ofrecen", "muestren",
-            # Preguntas sobre productos
-            "precio", "costo", "cuánto", "valor", "€",
-            # Términos generales
-            "producto", "artículo", "opciones", "alternativas", "modelos",
-            # Términos eléctricos específicos
-            "termo", "termostato", "ventilador", "diferencial", "magnetotérmico",
-            "cable", "enchufe", "interruptor", "lámpara", "led", "bombilla",
-            "motor", "transformador", "fusible", "relé", "contactor", "timer",
-            "sensor", "detector", "alarma", "sirena", "pulsador", "conmutador",
-            "caja", "tubo", "canaleta", "regleta", "adaptador", "convertidor"
-        ]
-        
-        # Si detecta CUALQUIER indicador de producto, usar búsqueda real
-        if any(indicator in message_lower for indicator in product_indicators):
-            # Verificar que NO sea sobre pedidos ya realizados
-            order_indicators = ["mi pedido", "pedido realizado", "número de pedido", 
-                              "factura", "compra que hice", "ya compré", "mi compra"]
-            if not any(order_ind in message_lower for order_ind in order_indicators):
-                self.logger.info(f"🔍 Redirigiendo a búsqueda de productos desde standard_response: {message}")
-                return await self._handle_product_search(message, platform, knowledge_context)
+        # Confiar en la decisión de la IA - si llegamos aquí es porque la IA determinó
+        # que esta es la mejor estrategia para responder
         
         # Si no se pasó contexto, buscar información relevante
         if not knowledge_context:
@@ -1219,23 +1202,52 @@ Responde de forma natural, como lo haría un vendedor experto y amable. Si el cl
         # Tomar últimos 3 intercambios
         recent = self.conversation_state.conversation_history[-6:]  # 3 pares user/assistant
         
-        summary = "Contexto reciente:\n"
+        summary = "CONTEXTO DE CONVERSACIÓN RECIENTE:\n"
         products_shown = False
+        product_details = []
         
         for msg in recent:
             role = "Usuario" if msg["role"] == "user" else self.bot_name
             content = msg["content"]
             
             # Detectar si se mostraron productos
-            if role == self.bot_name and any(phrase in content.lower() for phrase in ["opciones que coinciden", "productos encontrados", "termo eléctrico", "aquí tienes"]):
-                products_shown = True
-                summary += f"- {role}: [MOSTRÓ PRODUCTOS AL USUARIO]\n"
+            if role == self.bot_name:
+                # Buscar patrones de productos mostrados
+                import re
+                
+                # Buscar productos con formato HTML (WordPress)
+                product_matches = re.findall(r'<strong>([^<]+)</strong>.*?(\d+[,.]?\d*)\s*€', content)
+                if product_matches:
+                    products_shown = True
+                    for i, (name, price) in enumerate(product_matches[:5], 1):
+                        product_details.append(f"  {i}. {name} - {price}€")
+                
+                # Buscar productos con formato WhatsApp
+                wa_product_matches = re.findall(r'(?:\d+\.\s*)?(?:\*)?([^*\n]+?)(?:\*)?(?:\s*-\s*|\n).*?(\d+[,.]?\d*)\s*€', content)
+                if wa_product_matches and not product_matches:
+                    products_shown = True
+                    for i, (name, price) in enumerate(wa_product_matches[:5], 1):
+                        product_details.append(f"  {i}. {name.strip()} - {price}€")
+                
+                # Si encontramos productos, resumir
+                if products_shown and product_details:
+                    summary += f"- {role}: [MOSTRÓ {len(product_details)} PRODUCTOS]:\n"
+                    for detail in product_details[:3]:  # Mostrar máximo 3 para contexto
+                        summary += f"{detail}\n"
+                    if len(product_details) > 3:
+                        summary += f"  ... y {len(product_details) - 3} productos más\n"
+                    product_details = []  # Limpiar para siguiente mensaje
+                else:
+                    # Mensaje normal sin productos
+                    content_preview = content[:100] + "..." if len(content) > 100 else content
+                    summary += f"- {role}: {content_preview}\n"
             else:
+                # Mensaje del usuario
                 content_preview = content[:100] + "..." if len(content) > 100 else content
                 summary += f"- {role}: {content_preview}\n"
         
         if products_shown:
-            summary += "\nNOTA: Se mostraron productos en la conversación reciente\n"
+            summary += "\n⚠️ IMPORTANTE: Se mostraron productos recientemente. Si el usuario se refiere a 'el más barato', 'el primero', etc., se refiere a ESTOS productos.\n"
         
         return summary
     
