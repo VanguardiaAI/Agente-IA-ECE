@@ -16,9 +16,6 @@ import subprocess
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.incremental_sync import IncrementalSyncService
-from services.woocommerce import WooCommerceService
-from services.database import HybridDatabaseService as DatabaseService
-from services.embedding_service import EmbeddingService
 from config.settings import settings
 
 # Configure logging
@@ -41,11 +38,12 @@ async def wait_for_postgres():
     max_retries = 30
     retry_delay = 2
     
+    from services import database
+    
     for i in range(max_retries):
         try:
-            db_service = DatabaseService()  # No parameters needed
-            await db_service.initialize()
-            await db_service.close()
+            await database.db_service.initialize()
+            await database.db_service.close()
             logger.info("PostgreSQL is ready!")
             return True
         except Exception as e:
@@ -67,20 +65,18 @@ async def update_products():
         if not await wait_for_postgres():
             raise Exception("PostgreSQL is not available")
         
-        # Initialize services
-        woo_service = WooCommerceService()  # No parameters needed
+        # Initialize database and embedding services globally
+        from services import database, embedding_service as embed_svc
         
-        db_service = DatabaseService()  # No parameters needed
-        await db_service.initialize()
+        # Initialize database
+        await database.db_service.initialize()
         
-        embedding_service = EmbeddingService()  # No parameters needed
-        await embedding_service.initialize()
+        # Initialize embeddings
+        await embed_svc.embedding_service.initialize()
         
-        sync_service = IncrementalSyncService(
-            woo_service=woo_service,
-            db_service=db_service,
-            embedding_service=embedding_service
-        )
+        # Initialize sync service (uses global instances)
+        sync_service = IncrementalSyncService()
+        await sync_service.initialize()
         
         # Run synchronization
         result = await sync_service.sync_products()
@@ -89,7 +85,7 @@ async def update_products():
         logger.info(f"Added: {result['added']}, Updated: {result['updated']}, "
                    f"Deleted: {result['deleted']}, Errors: {result['errors']}")
         
-        await db_service.close()
+        await database.db_service.close()
         return result
         
     except Exception as e:
