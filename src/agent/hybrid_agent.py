@@ -159,39 +159,6 @@ class HybridCustomerAgent:
         start_time = datetime.now()
         print(f"\n👤 Usuario ({user_id}) [{platform}]: {message}")
         
-        # INTERCEPTOR DIRECTO DE PRODUCTOS - MÁXIMA PRIORIDAD
-        message_lower = message.lower()
-        direct_product_keywords = [
-            "quiero un", "busco un", "necesito un", "tienen", 
-            "termo", "ventilador", "diferencial", "cable", "enchufe",
-            "eléctrico", "electrico", "precio de", "cuánto cuesta"
-        ]
-        
-        if any(keyword in message_lower for keyword in direct_product_keywords):
-            self.logger.info(f"🎯 INTERCEPTOR: Búsqueda directa de producto detectada")
-            # Actualizar historial antes de procesar
-            self.conversation_state.conversation_history.append({
-                "role": "user",
-                "content": message,
-                "timestamp": datetime.now().isoformat()
-            })
-            
-            # Procesar directamente como búsqueda de productos
-            response = await self._process_with_tools(message, platform)
-            
-            # Actualizar historial con respuesta
-            self.conversation_state.conversation_history.append({
-                "role": "assistant",
-                "content": response,
-                "timestamp": datetime.now().isoformat(),
-                "strategy": "tool_assisted"
-            })
-            
-            # Log y retornar
-            self.logger.info(f"🤖 {self.bot_name} (tool_assisted-intercepted): {response[:100]}...")
-            return self._format_for_platform(response, platform)
-        
-        # Si no es producto, continuar con el flujo normal
         # Verificar si debemos escalar antes de procesar
         session_id = self.conversation_state.session_id or f"session_{user_id}"
         previous_response = self.conversation_state.conversation_history[-1]["content"] if self.conversation_state.conversation_history else None
@@ -273,22 +240,35 @@ class HybridCustomerAgent:
         if not message or not message.strip():
             return "quick_response"
             
-        # BYPASS TEMPORAL: Usar lógica directa para productos
+        # Detección mejorada de productos con análisis contextual
         message_lower = message.lower()
         
-        # Lista de palabras clave que indican búsqueda de productos
-        product_keywords = [
-            "quiero", "busco", "necesito", "tienen", "muéstrame", "enséñame",
-            "producto", "precio", "cuánto", "valor",
-            "termo", "ventilador", "diferencial", "cable", "enchufe",
-            "termostato", "radiador", "calefactor", "lámpara", "bombilla",
-            "eléctrico", "electrico"
+        # Frases y patrones que indican búsqueda de productos
+        product_patterns = [
+            "quiero un", "busco un", "necesito un", "quiero comprar",
+            "tienen", "muéstrame", "enséñame", "dónde encuentro",
+            "precio de", "cuánto cuesta", "valor de", "oferta de"
         ]
         
-        # Si detecta producto, usar tool_assisted directamente
-        if any(keyword in message_lower for keyword in product_keywords):
-            self.logger.info(f"🎯 Detección directa de producto, usando tool_assisted")
-            return "tool_assisted"
+        # Términos específicos de productos eléctricos
+        electrical_products = [
+            "termo", "ventilador", "diferencial", "cable", "enchufe",
+            "termostato", "radiador", "calefactor", "lámpara", "bombilla",
+            "interruptor", "magnetotérmico", "automático", "led", "panel",
+            "detector", "sensor", "transformador", "fusible", "regleta"
+        ]
+        
+        # Detectar patrones de búsqueda de productos
+        has_product_pattern = any(pattern in message_lower for pattern in product_patterns)
+        has_electrical_term = any(term in message_lower for term in electrical_products)
+        
+        # Si tiene tanto patrón como término, es muy probable que sea búsqueda de producto
+        if has_product_pattern or has_electrical_term:
+            # Verificar que NO sea una consulta sobre pedidos ya realizados
+            order_indicators = ["mi pedido", "pedido realizado", "número de pedido", "estado de mi"]
+            if not any(indicator in message_lower for indicator in order_indicators):
+                self.logger.info(f"🎯 Búsqueda de producto detectada, usando tool_assisted")
+                return "tool_assisted"
         
         # Para otros casos, continuar con el análisis normal
         # Truncar mensajes muy largos para el análisis

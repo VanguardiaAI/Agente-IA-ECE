@@ -234,19 +234,42 @@ class HybridDatabaseService:
                     if content_types:
                         type_filter = f"AND content_type = ANY(ARRAY{content_types}::text[])"
                     
-                    # Búsqueda DIRECTA de productos con el término en el título (normalizar acentos)
-                    exact_title_query = f"""
-                        SELECT id, title, content, content_type, metadata, external_id
-                        FROM knowledge_base 
-                        WHERE is_active = true 
-                        AND (UPPER(unaccent(title)) LIKE '%' || UPPER(unaccent($1)) || '%'
-                             OR UPPER(title) LIKE '%' || UPPER($1) || '%')
-                        {type_filter}
-                        ORDER BY title
-                        LIMIT 30
-                    """
-                    
-                    rows = await conn.fetch(exact_title_query, term)
+                    # Para términos compuestos, buscar más específicamente
+                    if ' ' in term:  # Es un término compuesto como "termo eléctrico"
+                        # Buscar productos que contengan TODAS las palabras del término compuesto
+                        words = term.split()
+                        where_conditions = []
+                        for word in words:
+                            where_conditions.append(f"(UPPER(unaccent(title)) LIKE '%' || UPPER(unaccent('{word}')) || '%')")
+                        
+                        where_clause = " AND ".join(where_conditions)
+                        
+                        exact_title_query = f"""
+                            SELECT id, title, content, content_type, metadata, external_id
+                            FROM knowledge_base 
+                            WHERE is_active = true 
+                            AND {where_clause}
+                            {type_filter}
+                            ORDER BY 
+                                -- Priorizar los que tienen el término exacto
+                                CASE WHEN UPPER(title) LIKE '%TERMO%ELECTRICO%' OR UPPER(title) LIKE '%TERMO%ELÉCTRICO%' THEN 0 ELSE 1 END,
+                                title
+                            LIMIT 30
+                        """
+                        rows = await conn.fetch(exact_title_query)
+                    else:
+                        # Para términos simples, usar la búsqueda original
+                        exact_title_query = f"""
+                            SELECT id, title, content, content_type, metadata, external_id
+                            FROM knowledge_base 
+                            WHERE is_active = true 
+                            AND (UPPER(unaccent(title)) LIKE '%' || UPPER(unaccent($1)) || '%'
+                                 OR UPPER(title) LIKE '%' || UPPER($1) || '%')
+                            {type_filter}
+                            ORDER BY title
+                            LIMIT 30
+                        """
+                        rows = await conn.fetch(exact_title_query, term)
                     logger.info(f"   ✅ Encontrados {len(rows)} productos con '{term}' en título")
                     
                     for row in rows:
@@ -647,6 +670,34 @@ class HybridDatabaseService:
             'que', 'como', 'donde', 'cuando', 'porque', 'si', 'no', 'me', 'te', 'se',
             'en', 'por', 'sobre', 'bajo', 'entre', 'desde', 'hasta', 'hacia', 'contra'
         }
+        
+        # Términos compuestos que deben buscarse PRIMERO
+        compound_technical_terms = {
+            'termo eléctrico': 'termo electrico',
+            'termo electrico': 'termo eléctrico',
+            'ventilador industrial': 'ventilador industrial',
+            'ventilador de techo': 'ventilador techo',
+            'radiador toallero': 'toallero electrico',
+            'diferencial superinmunizado': 'diferencial si',
+            'magnetotérmico dpn': 'automatico dpn',
+            'cable eléctrico': 'cable electrico',
+            'panel led': 'panel led',
+            'bombilla led': 'bombilla led',
+            'detector de movimiento': 'detector movimiento',
+            'detector de presencia': 'detector presencia',
+            'portalámparas termoplástico': 'portalamparas termoplastico'
+        }
+        
+        # Primero buscar términos compuestos
+        query_lower = query_text.lower()
+        for compound_term, normalized in compound_technical_terms.items():
+            if compound_term in query_lower:
+                technical_terms.append(compound_term)
+                # No agregar las palabras individuales si encontramos el compuesto
+                words_in_compound = compound_term.split()
+                for word in words_in_compound:
+                    if word in technical_terms:
+                        technical_terms.remove(word)
         
         # Términos técnicos específicos que SIEMPRE deben priorizarse
         specific_technical_terms = {
