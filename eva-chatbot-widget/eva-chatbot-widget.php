@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('EVA_CHATBOT_VERSION', '2.2.3');
+define('EVA_CHATBOT_VERSION', '2.1.9');
 define('EVA_CHATBOT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('EVA_CHATBOT_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('EVA_CHATBOT_PLUGIN_BASENAME', plugin_basename(__FILE__));
