@@ -27,11 +27,19 @@ class SearchOptimizer:
         """
         
         prompt = f"""
-Un cliente de tienda eléctrica dice: "{user_query}"
+Un cliente dice: "{user_query}"
 
-Analiza qué producto busca realmente. Si dice "termo eléctrico", busca CALENTADORES DE AGUA.
+INSTRUCCIONES IMPORTANTES:
+1. CORRIGE errores ortográficos (ej: "temro" → "termo", "electrico" → "eléctrico")
+2. IDENTIFICA el producto real que busca
+3. GENERA términos de búsqueda que coincidan con nombres de catálogo
 
-Devuelve JSON con términos de búsqueda optimizados:
+TRADUCCIONES CLAVE:
+- "termo eléctrico" = CALENTADOR DE AGUA ELÉCTRICO (aparato para calentar agua)
+- "diferencial" = INTERRUPTOR DIFERENCIAL
+- "ventilador" = VENTILADOR (NO confundir con otros productos eléctricos)
+
+Devuelve JSON:
 {{
     "search_terms": ["calentador", "agua", "termo"],
     "product_type": "calentador de agua",
@@ -39,10 +47,9 @@ Devuelve JSON con términos de búsqueda optimizados:
 }}
 
 REGLAS:
-- NO incluir verbos (quiero/busco/necesito)
-- SÍ incluir nombre del producto como aparecería en catálogo
-- "termo eléctrico" = calentador de agua eléctrico
-- "diferencial" = interruptor diferencial
+- NO incluir saludos ni verbos (hola/quiero/busco/necesito)
+- SOLO términos del producto
+- Si dice "termo" SIEMPRE incluir "calentador agua"
 """
 
         try:
@@ -147,10 +154,16 @@ REGLAS:
         prompt = f"""
 El cliente busca: "{user_query}"
 
+IMPORTANTE: Si busca "termo eléctrico" quiere CALENTADORES DE AGUA, NO otros productos eléctricos.
+
 Productos encontrados:
 {self._format_products_for_analysis(products[:20])}
 
-Selecciona los {limit} productos más relevantes.
+Selecciona SOLO los {limit} productos que coincidan con lo que busca el cliente.
+- Si busca "termo eléctrico": SOLO calentadores de agua/termos
+- Si busca "ventilador": SOLO ventiladores
+- NO incluir productos no relacionados aunque tengan "eléctrico"
+
 Responde con JSON: {{"product_ids": ["id1", "id2", "id3"]}}
 """
 
