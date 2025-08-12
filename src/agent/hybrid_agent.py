@@ -960,6 +960,23 @@ Cliente: {self.conversation_state.context.customer_name or 'Cliente'}
     async def _process_standard_response(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
         """Procesa usando el LLM principal con contexto de knowledge base"""
         
+        # Verificar si es una búsqueda de productos que no fue detectada
+        message_lower = message.lower()
+        product_keywords = ["quiero", "busco", "necesito", "tienen", "precio", "costo", "cuánto", 
+                          "comprar", "producto", "artículo", "disponible", "stock", "hay",
+                          "muéstrame", "enséñame", "dame", "opciones", "alternativas",
+                          # Términos eléctricos específicos
+                          "termo", "termostato", "ventilador", "diferencial", "magnetotérmico",
+                          "cable", "enchufe", "interruptor", "lámpara", "led", "bombilla",
+                          "motor", "transformador", "fusible", "relé", "contactor"]
+        
+        # Si parece una búsqueda de productos, usar el handler específico
+        if any(keyword in message_lower for keyword in product_keywords):
+            # Verificar que no sea una pregunta sobre un pedido
+            if not any(word in message_lower for word in ["pedido", "orden", "compra realizada", "factura"]):
+                self.logger.info(f"Detectada búsqueda de productos en standard_response: {message}")
+                return await self._handle_product_search(message, platform, knowledge_context)
+        
         # Si no se pasó contexto, buscar información relevante
         if not knowledge_context:
             knowledge_context = await self._search_knowledge_base(message)
