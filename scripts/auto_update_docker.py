@@ -82,8 +82,13 @@ async def update_products():
         result = await sync_service.sync_incremental()
         
         logger.info(f"Product sync completed: {result}")
-        logger.info(f"Added: {result['added']}, Updated: {result['updated']}, "
-                   f"Deleted: {result['deleted']}, Errors: {result['errors']}")
+        # Log details based on available keys
+        added = result.get('added', result.get('new_products', 0))
+        updated = result.get('updated', result.get('updated_products', 0))
+        deleted = result.get('deleted', 0)
+        errors = result.get('errors', 0)
+        logger.info(f"Added: {added}, Updated: {updated}, "
+                   f"Deleted: {deleted}, Errors: {errors}")
         
         await database.db_service.close()
         return result
@@ -179,7 +184,17 @@ async def main():
     try:
         # Update products
         products_result = await update_products()
-        details['products'] = products_result
+        # Normalize keys for consistency
+        if products_result and not isinstance(products_result, dict) or 'error' not in products_result:
+            details['products'] = {
+                'added': products_result.get('added', products_result.get('new_products', 0)),
+                'updated': products_result.get('updated', products_result.get('updated_products', 0)),
+                'deleted': products_result.get('deleted', 0),
+                'errors': products_result.get('errors', 0),
+                'total': products_result.get('total_fetched', 0)
+            }
+        else:
+            details['products'] = products_result
         
         # Update knowledge base
         knowledge_result = await update_knowledge_base()
