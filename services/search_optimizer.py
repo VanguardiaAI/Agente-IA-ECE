@@ -39,7 +39,7 @@ EJEMPLOS DE ANÁLISIS:
 - "necesito un ventilador de pared" → Busca un VENTILADOR DE PARED (no un ventilador de techo ni portátil)
 - "busco un diferencial" → Busca un INTERRUPTOR DIFERENCIAL o DIFERENCIAL (protección eléctrica)
 
-Para la consulta actual, genera:
+Para la consulta actual, genera un JSON con el siguiente formato:
 {{
     "search_terms": [lista de palabras clave que aparecerían en el nombre del producto],
     "product_type": "categoría específica del producto",
@@ -67,10 +67,16 @@ REGLAS:
             )
             
             import json
-            result = json.loads(response.choices[0].message.content)
+            content = response.choices[0].message.content
+            logger.info(f"📝 Respuesta raw de IA: {content}")
             
-            logger.info(f"✅ Análisis de búsqueda: {result}")
-            return result
+            try:
+                result = json.loads(content)
+                logger.info(f"✅ Análisis de búsqueda: {result}")
+                return result
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parseando JSON: {e}, Content: {content}")
+                raise
             
         except Exception as e:
             logger.error(f"Error en análisis de búsqueda: {e}")
@@ -106,8 +112,8 @@ Considera:
 - Características mencionadas (capacidad, marca, etc)
 - Relevancia real vs coincidencias parciales de palabras
 
-Responde SOLO con los IDs de los productos más relevantes en orden de relevancia.
-Formato JSON: {{"product_ids": ["id1", "id2", "id3", ...]}}
+Responde SOLO con un JSON que contenga los IDs de los productos más relevantes en orden de relevancia.
+Formato: {{"product_ids": ["id1", "id2", "id3", ...]}}
 """
 
         try:
@@ -123,7 +129,10 @@ Formato JSON: {{"product_ids": ["id1", "id2", "id3", ...]}}
             )
             
             import json
-            result = json.loads(response.choices[0].message.content)
+            content = response.choices[0].message.content
+            logger.info(f"📝 Respuesta optimización: {content}")
+            
+            result = json.loads(content)
             selected_ids = result.get("product_ids", [])
             
             # Reordenar productos según la selección de la IA
