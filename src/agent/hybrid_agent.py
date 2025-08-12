@@ -909,48 +909,9 @@ Responde SOLO con la categoría: order_inquiry, stock_check, faq_inquiry, produc
             if not knowledge_context:
                 knowledge_context = await self._search_knowledge_base(message)
             
-            if not knowledge_context:
-                # Si no encontramos nada en knowledge base, usar respuesta genérica
-                return await self._process_standard_response(message, platform)
-            
-            # Construir respuesta basada en el contexto encontrado
-            response = ""
-            
-            # Tomar el documento más relevante (el primero)
-            most_relevant = knowledge_context[0]
-            content = most_relevant.get('content', '')
-            
-            # Validar que tenemos contenido
-            if not content or not content.strip():
-                self.logger.warning(f"Empty content in knowledge base for query: '{message}'")
-                return await self._process_standard_response(message, platform)
-            
-            # Formatear respuesta según plataforma
-            if platform == "wordpress":
-                from src.utils.wordpress_utils import format_text_response
-                response = f"<h4>{most_relevant.get('title', 'Información')}</h4>\n"
-                response += f"<p>{content}</p>"
-                
-                # Si hay más documentos relevantes, mencionarlos
-                if len(knowledge_context) > 1:
-                    response += "\n<p><em>También podría interesarte:</em></p>\n<ul>"
-                    for doc in knowledge_context[1:3]:  # Máximo 2 adicionales
-                        response += f"<li>{doc.get('title', 'Información adicional')}</li>"
-                    response += "</ul>"
-                
-                return format_text_response(response, preserve_breaks=True)
-            else:
-                # WhatsApp
-                response = f"📋 *{most_relevant.get('title', 'Información')}*\n\n"
-                response += content
-                
-                # Si hay más documentos relevantes, mencionarlos
-                if len(knowledge_context) > 1:
-                    response += "\n\n💡 _También podría interesarte:_"
-                    for doc in knowledge_context[1:3]:  # Máximo 2 adicionales
-                        response += f"\n• {doc.get('title', 'Información adicional')}"
-                
-                return response
+            # Usar _process_standard_response con el knowledge context
+            # Esto permite que la IA procese y formatee la información correctamente
+            return await self._process_standard_response(message, platform, knowledge_context)
                 
         except Exception as e:
             self.logger.error(f"Error en consulta FAQ: {e}")
@@ -1180,7 +1141,8 @@ CONTEXTO DE LA CONVERSACIÓN:
 {format_instructions}
 
 INFORMACIÓN CRÍTICA DE LA EMPRESA:
-- NO HAY TIENDA FÍSICA. Somos una tienda exclusivamente online.
+- ⚠️ NO HAY TIENDA FÍSICA. Somos una tienda EXCLUSIVAMENTE ONLINE. NO se puede visitar ninguna tienda.
+- Dirección fiscal (NO es tienda): Calle Laguna de Marquesado 47, Nave D, 28021 Madrid (solo oficinas)
 - Tenemos más de 4,500 productos eléctricos en nuestro catálogo online.
 - Toda la venta es a través de la web: https://elcorteelectrico.com
 - WhatsApp soporte: +34614218122
