@@ -855,6 +855,10 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
                         platform=platform
                     )
                     
+                    # Debug log para verificar formato HTML
+                    logger.info(f"Response preview (first 200 chars): {response[:200]}")
+                    logger.info(f"Platform used: {platform}")
+                    
                     # Registrar respuesta del bot si hay métricas
                     if metrics_service and conversation_id:
                         response_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)

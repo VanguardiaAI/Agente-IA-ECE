@@ -290,6 +290,62 @@
         .message-content em {
             font-style: italic;
         }
+        
+        /* Estilos para product cards */
+        .eva-product-card {
+            transition: all 0.2s ease;
+        }
+        
+        .eva-product-card:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+        }
+        
+        .eva-product-link:hover {
+            background: #416319 !important;
+            transform: translateX(2px);
+        }
+        
+        .eva-products-list {
+            scrollbar-width: thin;
+            scrollbar-color: #ddd transparent;
+        }
+        
+        .eva-products-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .eva-products-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .eva-products-list::-webkit-scrollbar-thumb {
+            background: #ddd;
+            border-radius: 3px;
+        }
+        
+        .eva-products-list::-webkit-scrollbar-thumb:hover {
+            background: #bbb;
+        }
+        
+        /* Ajustes para los mensajes con HTML */
+        .message-content p {
+            margin: 0 0 12px 0;
+            line-height: 1.5;
+        }
+        
+        .message-content p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .message-content ul {
+            margin: 0 0 12px 0;
+            padding-left: 20px;
+        }
+        
+        .message-content li {
+            margin: 0 0 4px 0;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -507,6 +563,9 @@
             handleMessage(data) {
                 this.hideTypingIndicator();
                 
+                // Debug log
+                console.log('handleMessage - data:', data);
+                
                 switch(data.type) {
                     case 'welcome':
                         // Mensaje de bienvenida automático
@@ -551,21 +610,41 @@
             }
 
             formatMessage(content) {
-                // Formateo básico de markdown sin emojis
-                return content
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // **bold**
-                    .replace(/\*(.*?)\*/g, '<em>$1</em>')  // *italic*
-                    .replace(/\n/g, '<br>')  // saltos de línea
-                    // Remover emojis comunes o reemplazarlos con texto
-                    .replace(/✅/g, '[OK]')
-                    .replace(/❌/g, '[X]')
-                    .replace(/🔍/g, '')
-                    .replace(/💰/g, '')
-                    .replace(/📦/g, '')
-                    .replace(/🚚/g, '')
-                    .replace(/💬/g, '')
-                    .replace(/👋/g, '')
-                    .replace(/💡/g, '');
+                // Check if content contains HTML tags (product cards, etc.)
+                const hasHtml = /<[^>]+>/.test(content);
+                
+                // Debug log
+                console.log('formatMessage - hasHtml:', hasHtml, 'content preview:', content.substring(0, 100));
+                
+                if (hasHtml) {
+                    // If content has HTML, preserve it but still remove emojis
+                    return content
+                        .replace(/✅/g, '[OK]')
+                        .replace(/❌/g, '[X]')
+                        .replace(/🔍/g, '')
+                        .replace(/💰/g, '')
+                        .replace(/📦/g, '')
+                        .replace(/🚚/g, '')
+                        .replace(/💬/g, '')
+                        .replace(/👋/g, '')
+                        .replace(/💡/g, '');
+                } else {
+                    // For plain text, apply markdown formatting
+                    return content
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // **bold**
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>')  // *italic*
+                        .replace(/\n/g, '<br>')  // saltos de línea
+                        // Remover emojis comunes o reemplazarlos con texto
+                        .replace(/✅/g, '[OK]')
+                        .replace(/❌/g, '[X]')
+                        .replace(/🔍/g, '')
+                        .replace(/💰/g, '')
+                        .replace(/📦/g, '')
+                        .replace(/🚚/g, '')
+                        .replace(/💬/g, '')
+                        .replace(/👋/g, '')
+                        .replace(/💡/g, '');
+                }
             }
 
             showTypingIndicator() {
