@@ -329,7 +329,7 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                     {"role": "system", "content": "Eres un experto en análisis de consultas de atención al cliente. Determina la mejor estrategia de respuesta basándote en el tipo y complejidad de la consulta."},
                     {"role": "user", "content": strategy_prompt}
                 ],
-                temperature=0.1,
+                temperature=1,
                 max_completion_tokens=50
             )
             

@@ -61,7 +61,7 @@ REGLAS:
                     {"role": "system", "content": "Eres un experto en análisis de consultas de productos eléctricos. Entiendes sinónimos y variaciones de productos."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
+                temperature=1,
                 max_completion_tokens=200,
                 response_format={"type": "json_object"}
             )
@@ -117,7 +117,7 @@ Formato JSON: {{"product_ids": ["id1", "id2", "id3", ...]}}
                     {"role": "system", "content": "Eres un experto en productos eléctricos que ayuda a encontrar exactamente lo que el cliente necesita."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
+                temperature=1,
                 max_completion_tokens=100,
                 response_format={"type": "json_object"}
             )
