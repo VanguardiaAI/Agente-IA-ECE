@@ -144,7 +144,7 @@ class ChatMessage(BaseModel):
     """Modelo para mensajes de chat"""
     message: str
     user_id: str = "anonymous"
-    platform: str = "whatsapp"  # "whatsapp" o "wordpress"
+    platform: str = "wordpress"  # "whatsapp" o "wordpress" - default wordpress para web
 
 # Eventos de inicio y cierre
 @app.on_event("startup")
@@ -699,12 +699,16 @@ async def chat_endpoint(chat_message: ChatMessage, request: Request):
             raise HTTPException(status_code=503, detail="Agente no inicializado")
         
         # Detectar plataforma si no se especifica
-        if chat_message.platform == "whatsapp":
+        # Por defecto, usar "wordpress" para la interfaz web
+        if not chat_message.platform or chat_message.platform == "whatsapp":
             # Check headers for platform detection
             user_agent = request.headers.get("user-agent", "").lower()
             x_platform = request.headers.get("x-platform", "").lower()
             
-            if x_platform == "wordpress" or "wordpress" in user_agent:
+            # Si viene del endpoint /api/chat sin especificar plataforma, es WordPress
+            if not chat_message.platform:
+                chat_message.platform = "wordpress"
+            elif x_platform == "wordpress" or "wordpress" in user_agent:
                 chat_message.platform = "wordpress"
         
         # Iniciar tracking de conversación si hay servicio de métricas
