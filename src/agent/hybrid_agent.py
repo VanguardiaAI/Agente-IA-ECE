@@ -324,7 +324,7 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
             client = AsyncOpenAI()
             
             response = await client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-5-mini",
                 messages=[
                     {"role": "system", "content": "Eres un experto en análisis de consultas de atención al cliente. Determina la mejor estrategia de respuesta basándote en el tipo y complejidad de la consulta."},
                     {"role": "user", "content": strategy_prompt}
@@ -513,20 +513,35 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
         return "general"
     
     async def _handle_product_search(self, message: str, platform: str = "whatsapp", knowledge_context: str = "") -> str:
-        """Maneja búsquedas de productos usando búsqueda híbrida"""
+        """Maneja búsquedas de productos usando búsqueda híbrida con optimización IA"""
         try:
             self.logger.info(f"🔍 BÚSQUEDA DE PRODUCTOS: '{message}'")
             
-            # Generar embedding para la consulta
-            embedding = await self.embedding_service.generate_embedding(message)
+            # Usar el optimizador de búsqueda para analizar la consulta
+            from services.search_optimizer import search_optimizer
             
-            # Realizar búsqueda híbrida
+            search_analysis = await search_optimizer.analyze_product_query(message)
+            optimized_query = search_analysis.get('search_query', message)
+            
+            self.logger.info(f"🤖 Consulta optimizada: '{optimized_query}' (Original: '{message}')")
+            self.logger.info(f"📊 Análisis: {search_analysis}")
+            
+            # Generar embedding para la consulta OPTIMIZADA
+            embedding = await self.embedding_service.generate_embedding(optimized_query)
+            
+            # Realizar búsqueda híbrida con la consulta optimizada
             results = await self.db_service.hybrid_search(
-                query_text=message,
+                query_text=optimized_query,
                 query_embedding=embedding,
                 content_types=["product"],
-                limit=5
+                limit=20  # Buscar más para luego filtrar con IA
             )
+            
+            # Si hay resultados, optimizarlos con IA
+            if results and len(results) > 5:
+                self.logger.info(f"🎯 Optimizando {len(results)} resultados con IA...")
+                results = await search_optimizer.optimize_search_results(message, results, limit=5)
+                self.logger.info(f"✅ Resultados optimizados a {len(results)} productos más relevantes")
             
             if not results:
                 if platform == "wordpress":
