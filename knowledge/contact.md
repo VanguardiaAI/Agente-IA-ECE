@@ -14,7 +14,9 @@
 - **Gestión de devoluciones**: https://elcorteelectrico.com/devoluciones/
 
 ## Tienda Física
-- **No hay tienda física.**
+**NO TENEMOS TIENDA FÍSICA. Somos una tienda exclusivamente online.**
+- Todo es venta online a través de https://elcorteelectrico.com
+- La dirección Calle Laguna de Marquesado 47 es solo para oficinas/almacén (NO atención al público)
 
 ## Redes Sociales
 

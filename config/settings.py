@@ -158,9 +158,15 @@ ELECTRICAL_CATEGORIES = {
 HYBRID_SEARCH_CONFIG = {
     "vector_weight": 0.6,  # Peso de búsqueda semántica
     "text_weight": 0.4,    # Peso de búsqueda de texto
-    "min_similarity": 0.3,  # Similitud mínima para vectores
-    "max_results": 30,      # Máximo resultados antes de fusión
-    "final_limit": 10       # Límite final de resultados
+    "min_similarity": 0.2,  # Similitud mínima para vectores (reducido para más resultados)
+    "max_results": 80,      # Máximo resultados antes de fusión (aumentado)
+    "final_limit": 15,      # Límite final de resultados (aumentado)
+    # Configuración adaptativa
+    "exact_match_weight": 0.8,    # Peso para WooCommerce en búsquedas exactas
+    "semantic_match_weight": 0.3,  # Peso para WooCommerce en búsquedas semánticas
+    "wc_results_limit": 20,       # Límite de resultados de WooCommerce
+    "stock_boost_factor": 1.2,    # Factor de boost para productos en stock
+    "popularity_boost_factor": 1.1  # Factor de boost por popularidad
 }
 
 # Configuración de embeddings

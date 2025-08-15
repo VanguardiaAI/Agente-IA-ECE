@@ -7,7 +7,6 @@ Puedes realizar pedidos a través de:
 - **Web**: www.elcorteelectrico.com (24/7)
 - **Email**: ventas@elcorteelectrico.com
 - **Teléfono**: +34 614 21 81 22
-- **Tienda física**: Calle Laguna de Marquesado 47, Nave D, 28021 MADRID
 
 ### ¿Hay pedido mínimo?
 No hay pedido mínimo, pero el envío es gratuito a partir de 100€ en península y Portugal.
@@ -52,7 +51,7 @@ Para ejercer el derecho de desistimiento, dispones de 14 días naturales desde l
 
 ### ¿Cómo devuelvo un producto?
 - **Plazo**: 14 días naturales desde la recepción
-- **Contacto**: ventas@elcorteelectrico.com o escrito a Calle Laguna de Marquesado 47, Nave D, 28021 MADRID
+- **Contacto**: ventas@elcorteelectrico.com 
 - **Gastos**: El cliente se hace cargo de los transportes de devolución (y del transporte inicial si el pedido superaba los 100€)
 - **Estado**: Los productos deben estar en perfectas condiciones, sin usar y en su embalaje original
 

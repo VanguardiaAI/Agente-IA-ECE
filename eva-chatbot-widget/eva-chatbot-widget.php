@@ -3,7 +3,7 @@
  * Plugin Name: Eva Chatbot Widget
  * Plugin URI: https://vanguardia.dev/eva-chatbot
  * Description: Widget de chat inteligente para atención al cliente en tiendas WooCommerce
- * Version: 2.2.3
+ * Version: 2.2.4
  * Author: Vanguardia.dev
  * Author URI: https://vanguardia.dev
  * License: GPL v2 or later

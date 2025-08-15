@@ -20,6 +20,8 @@ class HybridDatabaseService:
     def __init__(self):
         self.pool = None
         self.initialized = False
+        self._search_cache = {}  # Cache para búsquedas frecuentes
+        self._cache_max_size = 500  # Máximo de búsquedas en cache
     
     async def initialize(self):
         """Inicializar el pool de conexiones y crear esquema"""
@@ -194,6 +196,93 @@ class HybridDatabaseService:
             
             return result.split()[-1] == '1'
     
+    async def intelligent_product_search(
+        self,
+        query_text: str,
+        query_embedding: List[float],
+        content_types: List[str] = None,
+        limit: int = None,
+        wc_service = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Búsqueda inteligente que combina WooCommerce y búsqueda híbrida
+        Prioriza WooCommerce para búsquedas exactas y usa híbrida para semánticas
+        """
+        if not self.initialized:
+            raise Exception("Base de datos no inicializada")
+        
+        limit = limit or HYBRID_SEARCH_CONFIG["final_limit"]
+        
+        # Detectar tipo de búsqueda
+        query_type = self._classify_search_query(query_text)
+        
+        # Verificar cache para búsquedas idénticas
+        cache_key = f"{query_text.lower().strip()}_{limit}_{query_type}"
+        if cache_key in self._search_cache:
+            logger.info(f"🔍 Usando resultado en cache para: '{query_text}'")
+            return self._search_cache[cache_key]
+        
+        logger.info(f"🔍 Búsqueda '{query_text}' clasificada como: {query_type}")
+        
+        all_results = {}
+        
+        # PASO 1: Búsqueda en WooCommerce (siempre, para asegurar productos exactos)
+        if wc_service:
+            wc_results = await self._search_woocommerce_products(
+                wc_service, query_text, query_type
+            )
+            
+            # Agregar resultados de WooCommerce con boost alto para búsquedas exactas
+            boost_factor = (HYBRID_SEARCH_CONFIG["exact_match_weight"] 
+                          if query_type in ['exact', 'technical'] 
+                          else HYBRID_SEARCH_CONFIG["semantic_match_weight"])
+            
+            for i, result in enumerate(wc_results):
+                # Score alto para WooCommerce, decreciente por posición
+                result['rrf_score'] = 100.0 * boost_factor * (1 - i * 0.1)
+                result['source'] = 'woocommerce'
+                result['match_type'] = query_type
+                
+                # Usar external_id como clave para evitar duplicados
+                external_id = result.get('external_id')
+                if external_id and external_id not in all_results:
+                    all_results[external_id] = result
+        
+        # PASO 2: Búsqueda híbrida en knowledge base (complementaria)
+        remaining_limit = max(1, limit - len(all_results))
+        if remaining_limit > 0:
+            hybrid_results = await self._hybrid_knowledge_search(
+                query_text, query_embedding, content_types, remaining_limit * 2
+            )
+            
+            # Agregar resultados híbridos si no están ya incluidos
+            for result in hybrid_results:
+                external_id = result.get('external_id')
+                if external_id and external_id not in all_results:
+                    # Aplicar boost por factores comerciales
+                    result = self._apply_commercial_boost(result)
+                    result['source'] = 'hybrid'
+                    all_results[external_id] = result
+        
+        # PASO 3: Ordenar y limitar resultados finales
+        final_results = list(all_results.values())
+        final_results.sort(key=lambda x: float(x.get('rrf_score', 0)), reverse=True)
+        
+        logger.info(f"📊 Resultados: {len(final_results)} total, WC: {len([r for r in final_results if r.get('source') == 'woocommerce'])}, Híbrida: {len([r for r in final_results if r.get('source') == 'hybrid'])}")
+        
+        # Guardar en cache (solo si hay resultados)
+        final_limited = final_results[:limit]
+        if final_limited:
+            # Limpiar cache si está lleno
+            if len(self._search_cache) >= self._cache_max_size:
+                old_keys = list(self._search_cache.keys())[:100]  # Eliminar 100 entradas
+                for key in old_keys:
+                    del self._search_cache[key]
+            
+            self._search_cache[cache_key] = final_limited
+        
+        return final_limited
+
     async def hybrid_search(
         self,
         query_text: str,
@@ -201,7 +290,7 @@ class HybridDatabaseService:
         content_types: List[str] = None,
         limit: int = None
     ) -> List[Dict[str, Any]]:
-        """Búsqueda que GARANTIZA encontrar productos con términos técnicos"""
+        """Búsqueda híbrida tradicional (mantenida para compatibilidad)"""
         if not self.initialized:
             raise Exception("Base de datos no inicializada")
         
@@ -636,6 +725,14 @@ class HybridDatabaseService:
         """Extraer términos técnicos específicos (códigos, modelos, SKUs) y términos técnicos relevantes"""
         import re
         
+        # Cache simple para evitar procesar la misma query múltiples veces
+        if not hasattr(self, '_technical_terms_cache'):
+            self._technical_terms_cache = {}
+        
+        query_key = query_text.lower().strip()
+        if query_key in self._technical_terms_cache:
+            return self._technical_terms_cache[query_key]
+        
         technical_terms = []
         
         # Palabras comunes a EXCLUIR (verbos, artículos, preposiciones)
@@ -971,8 +1068,137 @@ class HybridDatabaseService:
                 seen.add(term.upper())
                 unique_terms.append(term)
         
+        # Limitar cache a 1000 entradas para evitar memory leak
+        if len(self._technical_terms_cache) > 1000:
+            # Limpiar la mitad del cache (FIFO simple)
+            old_keys = list(self._technical_terms_cache.keys())[:500]
+            for key in old_keys:
+                del self._technical_terms_cache[key]
+        
+        # Guardar en cache
+        self._technical_terms_cache[query_key] = unique_terms
+        
         return unique_terms
     
+    def _classify_search_query(self, query_text: str) -> str:
+        """Clasificar el tipo de consulta para optimizar la búsqueda"""
+        query_lower = query_text.lower().strip()
+        
+        # Detectar búsquedas exactas/técnicas
+        if any(pattern in query_lower for pattern in [
+            'c10', 'c16', 'c20', 'c25', 'c32', 'c40', 'c50', 'c63',  # Curvas
+            'dpn', 'pia', 'magnetotermico', 'diferencial',  # Automáticos
+            'led', 'ip65', 'ip44', 'ip20',  # Códigos técnicos
+            '220v', '12v', '24v', '230v',  # Voltajes
+            '10a', '16a', '20a', '25a', '32a',  # Amperajes
+            '30ma', '300ma',  # Sensibilidades
+            '1.5mm', '2.5mm', '4mm', '6mm'  # Secciones
+        ]):
+            return 'technical'
+        
+        # Detectar búsquedas de códigos/modelos específicos
+        import re
+        if re.search(r'\b[A-Z]{2,}[0-9]*\b|\b\d+[WAV]?\b|\b[A-Z0-9]+-[A-Z0-9]+\b', query_text):
+            return 'exact'
+        
+        # Detectar búsquedas semánticas (preguntas o descripciones)
+        semantic_indicators = [
+            'necesito', 'busco', 'quiero', 'para', 'como', 'que', 'donde',
+            'cuanto', 'cual', 'ayuda', 'recomienda', 'mejor', 'sirve'
+        ]
+        if any(word in query_lower for word in semantic_indicators):
+            return 'semantic'
+        
+        # Por defecto, búsqueda mixta
+        return 'mixed'
+    
+    async def _search_woocommerce_products(self, wc_service, query_text: str, query_type: str) -> List[Dict[str, Any]]:
+        """Buscar productos en WooCommerce y convertir al formato estándar"""
+        try:
+            wc_limit = HYBRID_SEARCH_CONFIG["wc_results_limit"]
+            
+            # Usar WooCommerce search API
+            wc_products = await wc_service.search_products(query_text, per_page=wc_limit)
+            
+            if not wc_products:
+                return []
+            
+            # Convertir productos de WooCommerce al formato estándar
+            converted_results = []
+            for product in wc_products:
+                converted = {
+                    'id': f"wc_{product.get('id')}",
+                    'external_id': f"product_{product.get('id')}",
+                    'title': product.get('name', ''),
+                    'content': product.get('description', ''),
+                    'content_type': 'product',
+                    'metadata': {
+                        'price': float(product.get('price', 0)),
+                        'regular_price': float(product.get('regular_price', 0)),
+                        'sale_price': float(product.get('sale_price', 0)) if product.get('sale_price') else None,
+                        'stock_status': product.get('stock_status', 'outofstock'),
+                        'stock_quantity': product.get('stock_quantity', 0),
+                        'sku': product.get('sku', ''),
+                        'permalink': product.get('permalink', ''),
+                        'categories': [cat.get('name', '') for cat in product.get('categories', [])],
+                        'tags': [tag.get('name', '') for tag in product.get('tags', [])],
+                        'featured': product.get('featured', False)
+                    }
+                }
+                converted_results.append(converted)
+            
+            logger.info(f"✅ WooCommerce encontró {len(converted_results)} productos para '{query_text}'")
+            return converted_results
+            
+        except Exception as e:
+            logger.error(f"❌ Error en búsqueda WooCommerce: {e}")
+            return []
+    
+    async def _hybrid_knowledge_search(
+        self, 
+        query_text: str, 
+        query_embedding: List[float], 
+        content_types: List[str], 
+        limit: int
+    ) -> List[Dict[str, Any]]:
+        """Realizar búsqueda híbrida en la knowledge base"""
+        try:
+            # Usar la función híbrida existente pero simplificada
+            return await self.hybrid_search(
+                query_text=query_text,
+                query_embedding=query_embedding,
+                content_types=content_types,
+                limit=limit
+            )
+        except Exception as e:
+            logger.error(f"❌ Error en búsqueda híbrida: {e}")
+            return []
+    
+    def _apply_commercial_boost(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Aplicar boost comercial basado en stock, precio, etc."""
+        try:
+            metadata = result.get('metadata', {})
+            current_score = float(result.get('rrf_score', 0))
+            
+            # Boost por stock disponible
+            if metadata.get('stock_status') == 'instock':
+                current_score *= HYBRID_SEARCH_CONFIG["stock_boost_factor"]
+            
+            # Boost por producto destacado
+            if metadata.get('featured', False):
+                current_score *= HYBRID_SEARCH_CONFIG["popularity_boost_factor"]
+            
+            # Penalización leve por productos sin precio
+            if not metadata.get('price', 0):
+                current_score *= 0.9
+            
+            result['rrf_score'] = current_score
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Error aplicando boost comercial: {e}")
+            return result
+
     async def get_pool(self):
         """Obtener el pool de conexiones para uso directo"""
         if not self.initialized or not self.pool:

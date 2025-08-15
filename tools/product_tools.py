@@ -248,23 +248,28 @@ def register_product_tools(mcp):
 
 # Funciones auxiliares
 async def _hybrid_product_search(query: str, limit: int) -> str:
-    """Realizar búsqueda híbrida en base de conocimiento"""
+    """Realizar búsqueda inteligente combinando WooCommerce y búsqueda híbrida"""
     try:
         # Generar embedding para la consulta
         embedding = await embedding_service.generate_embedding(query)
         
-        # Búsqueda híbrida
-        results = await db_service.hybrid_search(
+        # Crear instancia de WooCommerce para la búsqueda inteligente
+        from services.woocommerce import WooCommerceService
+        wc_service = WooCommerceService()
+        
+        # Búsqueda inteligente que combina WooCommerce + híbrida
+        results = await db_service.intelligent_product_search(
             query_text=query,
             query_embedding=embedding,
             content_types=["product"],
-            limit=limit
+            limit=limit,
+            wc_service=wc_service
         )
         
         if not results:
             return f"❌ No se encontraron productos para: '{query}'"
         
-        response = f"🔍 **Resultados híbridos para: '{query}'**\n\n"
+        response = f"🔍 **Resultados inteligentes para: '{query}'**\n\n"
         
         for i, result in enumerate(results, 1):
             metadata = result.get('metadata', {})
@@ -277,8 +282,13 @@ async def _hybrid_product_search(query: str, limit: int) -> str:
             sku = metadata.get('sku', '')
             categories = metadata.get('categories', [])
             rrf_score = result.get('rrf_score', 0)
+            source = result.get('source', 'unknown')
+            match_type = result.get('match_type', 'unknown')
             
-            response += f"📦 **{title}**\n"
+            # Icono según la fuente
+            source_icon = "🎯" if source == "woocommerce" else "🔍"
+            
+            response += f"{source_icon} **{title}**\n"
             
             # Precio con formato de oferta
             if sale_price and sale_price > 0 and sale_price < regular_price:
@@ -305,7 +315,7 @@ async def _hybrid_product_search(query: str, limit: int) -> str:
             if permalink:
                 response += f"   🔗 {permalink}\n"
             
-            response += f"   📊 Relevancia: {rrf_score:.3f}\n\n"
+            response += f"   📊 Relevancia: {rrf_score:.1f} ({source}/{match_type})\n\n"
         
         return response
         
