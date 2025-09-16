@@ -17,10 +17,12 @@ from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
 from langchain_openai import ChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langgraph.graph import StateGraph, MessagesState, START, END
+from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command
 from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
+from typing import TypedDict
+from src.agent.search_refiner_agent import search_refiner, RefinementState, SearchContext, RefinementState
 
 # Cargar variables de entorno
 load_dotenv("env.agent")
@@ -41,15 +43,21 @@ class ConversationContext:
     pending_actions: List[str] = field(default_factory=list)
     satisfaction_level: str = "unknown"  # unknown, satisfied, neutral, dissatisfied
 
-class MultiAgentState(MessagesState):
+class MultiAgentState(TypedDict):
     """Estado compartido entre todos los agentes"""
-    context: ConversationContext = field(default_factory=ConversationContext)
-    current_intent: str = "general"
-    confidence: float = 0.0
-    next_agent: Optional[str] = None
-    agent_responses: Dict[str, str] = field(default_factory=dict)
-    tools_used: List[str] = field(default_factory=list)
-    needs_human_handoff: bool = False
+    messages: List[BaseMessage]
+    context: ConversationContext
+    current_intent: str
+    confidence: float
+    next_agent: Optional[str]
+    agent_responses: Dict[str, str]
+    tools_used: List[str]
+    needs_human_handoff: bool
+    # Estado del refinador de búsqueda
+    search_context: Optional[SearchContext]
+    needs_refinement: bool
+    refinement_message: Optional[str]
+    session_id: str
 
 class IntentClassificationResult(BaseModel):
     """Resultado de clasificación de intención usando LLM"""
@@ -81,6 +89,7 @@ class CustomerServiceMultiAgent:
         # Cliente MCP
         self.mcp_client = None
         self.mcp_tools = None
+        self.mcp_session = None  # Sesión persistente
         
         # Grafo de agentes
         self.agent_graph = None
@@ -88,6 +97,10 @@ class CustomerServiceMultiAgent:
     def _initialize_llm(self, temperature: Optional[float] = None):
         """Inicializa el LLM principal - siempre usa OpenAI"""
         temp = temperature if temperature is not None else self.temperature
+        
+        # GPT-5 solo soporta temperature 1.0 por ahora
+        if self.model_name == "gpt-5":
+            temp = 1.0
         
         return ChatOpenAI(
             model=self.model_name,
@@ -99,7 +112,7 @@ class CustomerServiceMultiAgent:
         """Inicializa un LLM más barato para tareas simples - usa gpt-5-mini para economía"""
         return ChatOpenAI(
             model="gpt-5-mini",
-            temperature=0.1,
+            temperature=1.0,  # GPT-5 y variantes solo soportan 1.0
             max_tokens=1000
         )
     
@@ -134,6 +147,7 @@ class CustomerServiceMultiAgent:
         # Agregar nodos
         builder.add_node("supervisor", self.supervisor_agent)
         builder.add_node("classifier", self.intent_classifier_agent)
+        builder.add_node("search_refiner", self.search_refiner_agent)
         builder.add_node("product_agent", self.product_specialist_agent)
         builder.add_node("order_agent", self.order_specialist_agent)
         builder.add_node("support_agent", self.general_support_agent)
@@ -142,6 +156,7 @@ class CustomerServiceMultiAgent:
         # Definir flujo
         builder.add_edge(START, "classifier")
         builder.add_edge("classifier", "supervisor")
+        # search_refiner now has conditional routing
         builder.add_edge("product_agent", "synthesis_agent")
         builder.add_edge("order_agent", "synthesis_agent")
         builder.add_edge("support_agent", "synthesis_agent")
@@ -152,6 +167,7 @@ class CustomerServiceMultiAgent:
             "supervisor",
             self.route_to_specialist,
             {
+                "search_refiner": "search_refiner",
                 "product_agent": "product_agent",
                 "order_agent": "order_agent", 
                 "support_agent": "support_agent",
@@ -159,10 +175,20 @@ class CustomerServiceMultiAgent:
             }
         )
         
+        # El search_refiner decide si necesita refinamiento o continuar con búsqueda
+        builder.add_conditional_edges(
+            "search_refiner",
+            self.route_from_refiner,
+            {
+                "synthesis_agent": "synthesis_agent",  # Para mostrar pregunta de refinamiento
+                "product_agent": "product_agent"  # Para búsqueda directa
+            }
+        )
+        
         self.agent_graph = builder.compile()
         print("✅ Grafo de agentes construido correctamente")
     
-    async def intent_classifier_agent(self, state: MultiAgentState) -> Command:
+    async def intent_classifier_agent(self, state: MultiAgentState) -> dict:
         """Agente clasificador de intenciones usando LLM"""
         
         last_message = state["messages"][-1].content if state["messages"] else ""
@@ -175,12 +201,12 @@ Analiza el siguiente mensaje del cliente y clasifica la intención principal y s
 Mensaje del cliente: "{last_message}"
 
 Contexto de la conversación:
-- Nombre del cliente: {state.context.customer_name or 'Desconocido'}
-- Email: {state.context.customer_email or 'Desconocido'}
-- Número de pedido previo: {state.context.order_number or 'Ninguno'}
-- Productos de interés: {', '.join(state.context.preferred_products) or 'Ninguno'}
-- Etapa de conversación: {state.context.conversation_stage}
-- Turno de conversación: {state.context.turn_count}
+- Nombre del cliente: {state['context'].customer_name or 'Desconocido'}
+- Email: {state['context'].customer_email or 'Desconocido'}
+- Número de pedido previo: {state['context'].order_number or 'Ninguno'}
+- Productos de interés: {', '.join(state['context'].preferred_products) or 'Ninguno'}
+- Etapa de conversación: {state['context'].conversation_stage}
+- Turno de conversación: {state['context'].turn_count}
 
 Intenciones posibles:
 1. product_search - Buscar, consultar o recomendar productos
@@ -220,43 +246,53 @@ Responde SOLO con un JSON válido con esta estructura:
             
             classification = json.loads(classification_text)
             
-            # Actualizar estado
-            state.context.active_intents = [classification["primary_intent"]] + classification.get("secondary_intents", [])
-            state.current_intent = classification["primary_intent"]
-            state.confidence = classification["confidence"]
+            # Preparar actualización del contexto
+            updated_context = state['context']
+            updated_context.active_intents = [classification["primary_intent"]] + classification.get("secondary_intents", [])
             
-            # Actualizar entidades
+            # Actualizar entidades en el contexto
             entities = classification.get("entities", {})
             if entities.get("email"):
-                state.context.customer_email = entities["email"]
+                updated_context.customer_email = entities["email"]
             if entities.get("customer_name"):
-                state.context.customer_name = entities["customer_name"]
+                updated_context.customer_name = entities["customer_name"]
             if entities.get("order_number"):
-                state.context.order_number = entities["order_number"]
+                updated_context.order_number = entities["order_number"]
             if entities.get("product_names"):
-                state.context.preferred_products.extend(entities["product_names"])
+                updated_context.preferred_products.extend(entities["product_names"])
             
-            state.context.extracted_entities.update(entities)
+            updated_context.extracted_entities.update(entities)
             
             print(f"🎯 Intención clasificada: {classification['primary_intent']} (confianza: {classification['confidence']:.2f})")
+            
+            # Retornar actualizaciones del estado
+            return {
+                'current_intent': classification["primary_intent"],
+                'confidence': classification["confidence"],
+                'context': updated_context
+            }
             
         except Exception as e:
             print(f"⚠️ Error en clasificación: {e}")
             # Fallback a clasificación simple
-            state.current_intent = "general_help"
-            state.confidence = 0.5
-        
-        return Command(goto="supervisor")
+            return {
+                'current_intent': "general_help",
+                'confidence': 0.5
+            }
     
     async def supervisor_agent(self, state: MultiAgentState) -> Command:
         """Agente supervisor que orquesta el flujo"""
         
-        intent = state.current_intent
-        confidence = state.confidence
+        intent = state['current_intent']
+        confidence = state['confidence']
+        
+        # Debug del estado recibido
+        print(f"   Estado recibido - Intent: {intent}, Confidence: {confidence}")
         
         # Lógica de enrutamiento inteligente
         if intent in ["product_search", "product_inquiry"]:
-            next_agent = "product_agent"
+            # Para búsquedas de productos, usar el refinador primero
+            next_agent = "search_refiner"
         elif intent in ["order_inquiry", "order_status", "tracking"]:
             next_agent = "order_agent"
         elif intent in ["complaint", "returns_refunds", "payment_shipping"]:
@@ -267,8 +303,8 @@ Responde SOLO con un JSON válido con esta estructura:
         else:
             next_agent = "support_agent"
         
-        state.next_agent = next_agent
-        state.context.last_agent_used = next_agent
+        state['next_agent'] = next_agent
+        state['context'].last_agent_used = next_agent
         
         print(f"🎯 Supervisor enruta a: {next_agent}")
         
@@ -276,12 +312,214 @@ Responde SOLO con un JSON válido con esta estructura:
     
     def route_to_specialist(self, state: MultiAgentState) -> str:
         """Función de enrutamiento para el supervisor"""
-        return state.next_agent or "support_agent"
+        return state['next_agent'] or "support_agent"
+    
+    def route_from_refiner(self, state: MultiAgentState) -> str:
+        """Función de enrutamiento desde el search_refiner"""
+        # Si necesita refinamiento y hay un mensaje, ir a synthesis para mostrarlo
+        if state.get('needs_refinement') and state.get('refinement_message'):
+            return "synthesis_agent"
+        # Si no, continuar con búsqueda normal en product_agent
+        return "product_agent"
+    
+    async def search_refiner_agent(self, state: MultiAgentState) -> Command:
+        """Agente que refina búsquedas de productos mediante interacción iterativa"""
+        
+        last_message = state["messages"][-1].content if state["messages"] else ""
+        session_id = state['session_id'] or "default"
+        
+        print(f"🔍 Search refiner agent - session: {session_id}, message: {last_message[:50]}...")
+        
+        # Verificar si es una respuesta de refinamiento basado en is_refinement_response
+        if state.get('is_refinement_response'):
+            print(f"   ✅ Es respuesta de refinamiento, pasando directamente a product_agent")
+            print(f"   📦 Query refinada: '{last_message}'")
+            # El mensaje ya fue refinado en process_message, ir directo a productos
+            return Command(goto="product_specialist")
+        
+        # Si es una respuesta a una pregunta de refinamiento (caso legacy)
+        if state['needs_refinement'] and state['refinement_message']:
+            # El usuario está respondiendo a nuestra pregunta de refinamiento
+            refined_query = search_refiner.refine_query_with_response(
+                session_id=session_id,
+                user_response=last_message,
+                original_query=state['search_context'].original_query if state['search_context'] else last_message
+            )
+            
+            # Actualizar el mensaje para la búsqueda
+            state["messages"][-1] = HumanMessage(content=refined_query)
+            state['needs_refinement'] = False
+            state['refinement_message'] = None
+            
+            print(f"🔧 Consulta refinada: {refined_query}")
+            
+            # Continuar con el agente de productos - el routing condicional lo manejará
+            return Command()
+        
+        # Primera búsqueda - hacer una búsqueda inicial para evaluar
+        print(f"🔍 Evaluando necesidad de refinamiento para: {last_message}")
+        
+        # Realizar búsqueda inicial REAL usando las herramientas MCP
+        initial_results = []
+        result_count = 0
+        
+        print(f"🔍 Verificación MCP: self.mcp_tools = {len(self.mcp_tools) if self.mcp_tools else 0} herramientas")
+        print(f"   self.mcp_client = {self.mcp_client is not None}")
+        
+        if self.mcp_tools:
+            try:
+                # IMPORTANTE: Usar un lock para evitar concurrencia
+                if not hasattr(self, '_search_lock'):
+                    self._search_lock = asyncio.Lock()
+                
+                async with self._search_lock:
+                    # Esperar un momento para evitar problemas de concurrencia
+                    await asyncio.sleep(0.2)
+                    
+                    # CRÍTICO: Usar agente inteligente para entender la petición
+                    from services.intelligent_search_agent import intelligent_search
+                    user_analysis = await intelligent_search.understand_user_request(last_message)
+                    
+                    # Verificar si hay algo que buscar
+                    search_query = user_analysis.get('search_query', '')
+                    intent = user_analysis.get('intent', 'comprar')
+                    
+                    print(f"🤖 Análisis inteligente: query='{search_query}', intent={intent}")
+                    
+                    # Si no hay query o es confirmación, no buscar
+                    if not search_query or intent == 'confirmación':
+                        print(f"⚠️ No hay producto que buscar (query vacía o confirmación)")
+                        return Command()
+                    
+                    # Ejecutar búsqueda con la query optimizada
+                    result = await self._call_mcp_tool("search_products", {"query": search_query, "limit": 100})
+                    
+                    # DEBUG: Log del resultado de MCP
+                    print(f"🔍 MCP Search Result (raw): {result[:500] if isinstance(result, str) else result}")
+                    
+                    # Parsear la respuesta real del MCP tool
+                    if isinstance(result, str):
+                        import json
+                        import re
+                        
+                        # Primero buscar el marcador de conteo que agregamos
+                        count_match = re.search(r'<!-- PRODUCTS_COUNT:(\d+) -->', result)
+                        if count_match:
+                            result_count = int(count_match.group(1))
+                            
+                            # Si hay productos, extraer información básica para el refinador
+                            if result_count > 0:
+                                # Buscar productos por los iconos de fuente (🎯 o 🔍)
+                                product_matches = re.findall(r'[🎯🔍]\s+\*\*([^*]+)\*\*', result)
+                                
+                                for i, product_name in enumerate(product_matches[:30]):  # Máximo 30 para el refinador
+                                    # Extraer marca del nombre si es posible
+                                    brand = ""
+                                    for brand_name in ["Schneider", "ABB", "Legrand", "Simon", "Hager", "Siemens", "Chint", "Gewiss"]:
+                                        if brand_name.lower() in product_name.lower():
+                                            brand = brand_name
+                                            break
+                                    
+                                    initial_results.append({
+                                        "title": product_name.strip(),
+                                        "metadata": {
+                                            "brand": brand,
+                                            "attributes": {}
+                                        }
+                                    })
+                        else:
+                            # Fallback: buscar "No se encontraron productos"
+                            if "no se encontraron productos" in result.lower():
+                                result_count = 0
+                                initial_results = []
+                            else:
+                                # Si hay contenido pero no matches claros, asumir algunos resultados
+                                # Contar líneas numeradas (formato alternativo)
+                                numbered_items = re.findall(r'^\d+\.\s+', result, re.MULTILINE)
+                                if numbered_items:
+                                    result_count = len(numbered_items)
+                                    for i in range(min(result_count, 30)):
+                                        initial_results.append({
+                                            "title": f"Producto {i+1}",
+                                            "metadata": {}
+                                        })
+                                else:
+                                    # Si hay contenido sustancial, asumir que hay resultados
+                                    if len(result) > 200:
+                                        result_count = 10
+                                        initial_results = [{"title": f"Producto {i+1}", "metadata": {}} for i in range(10)]
+                                    else:
+                                        result_count = 0
+                                        initial_results = []
+                
+                print(f"   📦 Búsqueda inicial: {result_count} productos encontrados")
+                
+            except Exception as e:
+                print(f"⚠️ Error en búsqueda inicial: {e}")
+                print(f"   Tipo de error: {type(e).__name__}")
+                import traceback
+                print(f"   Stack trace: {traceback.format_exc()}")
+                # En caso de error, asumir búsqueda genérica
+                initial_results = []
+                result_count = 0
+        
+        # Evaluar si necesita refinamiento basado en los resultados parseados
+        needs_refinement, refinement_msg = await search_refiner.should_refine_search(
+            session_id=session_id,
+            query=last_message,
+            search_results=initial_results if initial_results else []
+        )
+        
+        # Forzar refinamiento para búsquedas muy genéricas
+        if not needs_refinement and result_count > 10:
+            # Detectar consultas muy genéricas
+            generic_terms = ["cable", "interruptor", "bombilla", "luz", "protección", "material"]
+            query_lower = last_message.lower()
+            
+            # Si la consulta es muy corta y genérica, forzar refinamiento
+            if len(query_lower.split()) <= 3 and any(term in query_lower for term in generic_terms):
+                # Verificar que no tiene especificaciones técnicas
+                import re
+                has_specs = bool(re.search(r'\d+[AaVvWw]|mm2?|\d+ma', query_lower))
+                has_brand = any(brand.lower() in query_lower for brand in ["schneider", "abb", "legrand", "simon"])
+                
+                if not has_specs and not has_brand:
+                    needs_refinement = True
+                    refinement_msg = (
+                        f"He encontrado {result_count} resultados para '{last_message}'. "
+                        f"Para mostrarte los más relevantes, ¿podrías especificar qué tipo necesitas "
+                        f"o para qué uso lo requieres?"
+                    )
+                    print(f"   🔄 Forzando refinamiento para consulta genérica")
+        
+        if needs_refinement and refinement_msg:
+            # Guardar estado para la próxima iteración
+            state['needs_refinement'] = True
+            state['refinement_message'] = refinement_msg
+            state['search_context'] = search_refiner.get_or_create_context(session_id, last_message)
+            
+            # Agregar pregunta de refinamiento al historial
+            state["messages"].append(AIMessage(content=refinement_msg))
+            
+            print(f"💬 Solicitando refinamiento: {refinement_msg[:100]}...")
+            
+            # Guardar mensaje de refinamiento para synthesis_agent
+            state['agent_responses']["search_refiner"] = refinement_msg
+            # El routing condicional se encargará de dirigir a synthesis_agent
+            return Command()
+        
+        # No necesita refinamiento, continuar con búsqueda normal
+        print(f"✅ Búsqueda directa sin refinamiento - Resultados manejables")
+        # El routing condicional se encargará de dirigir a product_agent
+        return Command()
     
     async def product_specialist_agent(self, state: MultiAgentState) -> Command:
         """Agente especialista en productos"""
         
         last_message = state["messages"][-1].content if state["messages"] else ""
+        
+        print(f"🔍 Product agent - Mensaje: {last_message[:50]}...")
+        print(f"🔧 MCP Tools disponibles: {len(self.mcp_tools) if self.mcp_tools else 0}")
         
         system_prompt = f"""
 Eres {self.bot_name} de {self.company_name}, especialista en productos eléctricos.
@@ -292,20 +530,24 @@ INFORMACIÓN CRÍTICA:
 - Web: https://elcorteelectrico.com
 
 REGLAS CRÍTICAS:
-1. MÁXIMO 2-3 frases en respuestas normales
-2. Solo detalles si los piden EXPLÍCITAMENTE
-3. Si no sabes: "Contacta por WhatsApp: https://wa.me/34614218122"
-4. NO inventes información sobre productos o SKUs
-5. Si piden más info de un producto, incluye el enlace
+1. SIEMPRE usa search_products para buscar productos cuando el cliente busque algo
+2. Muestra PRODUCTOS REALES con precios y disponibilidad
+3. Si encuentras menos de 10 productos, muéstralos TODOS
+4. Si encuentras más de 10, muestra los 10 más relevantes
+5. Incluye precio, disponibilidad y enlace de cada producto
+6. NO inventes productos - usa SOLO los resultados de search_products
 
-Cliente: {state.context.customer_name or 'Cliente'}
+Cliente: {state['context'].customer_name or 'Cliente'}
 Consulta: {last_message}
 
-Responde BREVE y directo.
+IMPORTANTE: Si la consulta menciona productos o cables, DEBES usar search_products.
 """
         
         # Obtener herramientas relevantes para productos
         relevant_tools = self._get_product_tools() if self.mcp_tools else []
+        print(f"🛠️ Herramientas de productos encontradas: {len(relevant_tools)}")
+        if relevant_tools:
+            print(f"   Herramientas: {[t.name for t in relevant_tools]}")
         
         if relevant_tools:
             # Usar LLM con herramientas
@@ -313,6 +555,11 @@ Responde BREVE y directo.
             messages = [SystemMessage(content=system_prompt)] + state["messages"][-3:]  # Contexto limitado
             
             response = await llm_with_tools.ainvoke(messages)
+            
+            print(f"📝 LLM Response type: {type(response)}")
+            print(f"📝 Has tool_calls: {hasattr(response, 'tool_calls')}")
+            if hasattr(response, 'tool_calls'):
+                print(f"📝 Tool calls: {response.tool_calls}")
             
             # Ejecutar herramientas si es necesario
             if hasattr(response, 'tool_calls') and response.tool_calls:
@@ -332,7 +579,7 @@ Responde BREVE y directo.
                 response_text = final_response.content
                 
                 # Registrar herramientas usadas
-                state.tools_used.extend([tc['name'] for tc in response.tool_calls])
+                state['tools_used'].extend([tc['name'] for tc in response.tool_calls])
             else:
                 response_text = response.content
         else:
@@ -342,7 +589,8 @@ Responde BREVE y directo.
             response_text = response.content
         
         # Guardar respuesta del agente
-        state.agent_responses["product_agent"] = response_text
+        print(f"📦 PRODUCT_AGENT: Guardando respuesta: {response_text[:200] if response_text else 'EMPTY'}...")
+        state['agent_responses']["product_agent"] = response_text
         
         return Command(goto="synthesis_agent")
     
@@ -366,7 +614,7 @@ REGLAS:
 4. Si no puedes ayudar: "Contacta por WhatsApp: https://wa.me/34614218122"
 5. NO inventes información sobre pedidos
 
-Cliente: {state.context.customer_name or 'Cliente'}
+Cliente: {state['context'].customer_name or 'Cliente'}
 Consulta: {last_message}
 
 Sé BREVE y directo.
@@ -396,7 +644,7 @@ Sé BREVE y directo.
                 final_response = await self.main_llm.ainvoke(final_messages)
                 response_text = final_response.content
                 
-                state.tools_used.extend([tc['name'] for tc in response.tool_calls])
+                state['tools_used'].extend([tc['name'] for tc in response.tool_calls])
             else:
                 response_text = response.content
         else:
@@ -404,7 +652,7 @@ Sé BREVE y directo.
             response = await self.main_llm.ainvoke(messages)
             response_text = response.content
         
-        state.agent_responses["order_agent"] = response_text
+        state['agent_responses']["order_agent"] = response_text
         
         return Command(goto="synthesis_agent")
     
@@ -429,7 +677,7 @@ REGLAS:
 5. NO inventes información ni datos
 6. Si preguntan por ubicación: somos solo online
 
-Cliente: {state.context.customer_name or 'Cliente'}
+Cliente: {state['context'].customer_name or 'Cliente'}
 
 CONSULTA DEL CLIENTE: {last_message}
 
@@ -439,7 +687,7 @@ Responde de manera comprensiva y útil.
         messages = [SystemMessage(content=system_prompt)] + state["messages"][-3:]
         response = await self.main_llm.ainvoke(messages)
         
-        state.agent_responses["support_agent"] = response.content
+        state['agent_responses']["support_agent"] = response.content
         
         return Command(goto="synthesis_agent")
     
@@ -447,22 +695,50 @@ Responde de manera comprensiva y útil.
         """Agente que sintetiza respuestas de múltiples agentes"""
         
         # Si solo hay una respuesta de agente, usarla directamente
-        agent_responses = state.agent_responses
+        agent_responses = state['agent_responses']
         
-        if len(agent_responses) == 1:
-            final_response = list(agent_responses.values())[0]
+        # DEBUG: Ver qué respuestas hay
+        print(f"🎯 SYNTHESIS: agent_responses = {agent_responses}")
+        print(f"🎯 SYNTHESIS: Número de respuestas: {len(agent_responses)}")
+        for agent, response in agent_responses.items():
+            print(f"   - {agent}: {response[:100] if response else 'EMPTY'}...")
+        
+        # PRIORIDAD 1: Si hay un mensaje de refinamiento, usarlo siempre
+        if state.get('needs_refinement') and state.get('refinement_message'):
+            final_response = state['refinement_message']
+            print(f"✅ SYNTHESIS: Usando mensaje de refinamiento")
+        elif "search_refiner" in agent_responses and agent_responses["search_refiner"]:
+            # Si hay respuesta del search_refiner, usarla (es una pregunta de refinamiento)
+            final_response = agent_responses["search_refiner"]
+            print(f"✅ SYNTHESIS: Usando respuesta de search_refiner (refinamiento)")
         else:
-            # Sintetizar múltiples respuestas
-            synthesis_prompt = f"""
+            # Filtrar respuestas vacías
+            valid_responses = {k: v for k, v in agent_responses.items() if v and v.strip()}
+            
+            if not valid_responses:
+                # Si no hay respuestas válidas, generar una respuesta de fallback
+                print("⚠️ SYNTHESIS: No hay respuestas válidas, generando fallback")
+                final_response = "Lo siento, no pude procesar tu solicitud correctamente. ¿Podrías reformularla o darme más detalles?"
+            elif len(valid_responses) == 1:
+                # Si solo hay una respuesta válida, usarla directamente
+                final_response = list(valid_responses.values())[0]
+                print(f"✅ SYNTHESIS: Usando única respuesta de {list(valid_responses.keys())[0]}")
+            elif "product_agent" in valid_responses and len(valid_responses.get("product_agent", "")) > 100:
+                # Si el product_agent tiene una respuesta sustancial con productos, priorizarla
+                final_response = valid_responses["product_agent"]
+                print(f"✅ SYNTHESIS: Priorizando respuesta de product_agent con productos")
+            else:
+                # Sintetizar múltiples respuestas
+                synthesis_prompt = f"""
 Eres {self.bot_name}, y necesitas sintetizar las siguientes respuestas de agentes especialistas en una respuesta coherente y natural:
 
 RESPUESTAS DE AGENTES:
-{json.dumps(agent_responses, indent=2, ensure_ascii=False)}
+{json.dumps(valid_responses, indent=2, ensure_ascii=False)}
 
 CONTEXTO:
-- Cliente: {state.context.customer_name or 'Cliente'}
-- Intención: {state.current_intent}
-- Herramientas usadas: {', '.join(state.tools_used) if state.tools_used else 'Ninguna'}
+- Cliente: {state['context'].customer_name or 'Cliente'}
+- Intención: {state['current_intent']}
+- Herramientas usadas: {', '.join(state['tools_used']) if state['tools_used'] else 'Ninguna'}
 
 INSTRUCCIONES:
 - Combina la información de manera fluida y natural
@@ -477,13 +753,19 @@ Genera una respuesta final coherente:
             messages = [SystemMessage(content=synthesis_prompt)]
             response = await self.cheap_llm.ainvoke(messages)  # Usar LLM barato para síntesis
             final_response = response.content
+            print(f"✅ SYNTHESIS: Sintetizadas {len(valid_responses)} respuestas")
+        
+        # Asegurarse de que final_response no esté vacío
+        if not final_response or not final_response.strip():
+            final_response = "Lo siento, hubo un problema procesando tu solicitud. ¿Podrías intentarlo de nuevo?"
+            print("⚠️ SYNTHESIS: Respuesta final vacía, usando fallback")
         
         # Agregar respuesta final al historial
         state["messages"].append(AIMessage(content=final_response))
         
         # Actualizar contexto
-        state.context.turn_count += 1
-        state.context.conversation_summary += f" Respondió sobre {state.current_intent}."
+        state['context'].turn_count += 1
+        state['context'].conversation_summary += f" Respondió sobre {state['current_intent']}."
         
         return Command(goto=END)
     
@@ -530,6 +812,7 @@ Genera una respuesta final coherente:
             raise Exception("Cliente MCP no disponible")
         
         try:
+            # Crear nueva sesión para cada llamada (evita problemas de concurrencia)
             async with self.mcp_client.session("woocommerce") as session:
                 result = await session.call_tool(tool_name, tool_args)
                 
@@ -549,7 +832,7 @@ Genera una respuesta final coherente:
             print(f"❌ Error ejecutando herramienta {tool_name}: {e}")
             raise
     
-    async def process_message(self, message: str) -> str:
+    async def process_message(self, message: str, session_id: str = None, conversation_history: list = None) -> str:
         """Procesa un mensaje usando el sistema multi-agente"""
         
         if not self.agent_graph:
@@ -557,15 +840,48 @@ Genera una respuesta final coherente:
         
         print(f"\n👤 Usuario: {message}")
         
-        # Crear estado inicial
-        initial_state = MultiAgentState(
-            messages=[HumanMessage(content=message)],
-            context=ConversationContext(),
-            current_intent="unknown",
-            confidence=0.0,
-            agent_responses={},
-            tools_used=[]
-        )
+        # Generar session_id si no se proporciona
+        if not session_id:
+            import uuid
+            session_id = str(uuid.uuid4())
+        
+        # Importar search_refiner para verificar contexto
+        from src.agent.search_refiner_agent import search_refiner, RefinementState
+        
+        # Verificar si hay un contexto de refinamiento activo
+        refiner_context = search_refiner.contexts.get(session_id)
+        
+        # Si hay un contexto de refinamiento activo, combinar el mensaje con la consulta original
+        if refiner_context and refiner_context.current_state.value in ["asking_brand", "asking_attribute"]:
+            # Refinar la consulta original con la respuesta del usuario
+            refined_query = search_refiner.refine_query_with_response(
+                session_id=session_id,
+                user_response=message,
+                original_query=refiner_context.original_query
+            )
+            print(f"🔄 Refinando búsqueda: '{refiner_context.original_query}' + '{message}' = '{refined_query}'")
+            # Usar la consulta refinada para la búsqueda
+            message_to_process = refined_query
+        else:
+            message_to_process = message
+        
+        # Crear estado inicial como diccionario
+        initial_state = {
+            "messages": [HumanMessage(content=message_to_process)],
+            "context": ConversationContext(),
+            "current_intent": "unknown",
+            "confidence": 0.0,
+            "next_agent": None,
+            "agent_responses": {},
+            "tools_used": [],
+            "needs_human_handoff": False,
+            "search_context": refiner_context,  # Pasar el contexto de refinamiento
+            "needs_refinement": False,
+            "refinement_message": None,
+            "session_id": session_id,
+            "original_message": message,  # Guardar el mensaje original
+            "is_refinement_response": refiner_context is not None  # Indicar si es respuesta de refinamiento
+        }
         
         try:
             # Ejecutar el grafo de agentes
@@ -578,9 +894,9 @@ Genera una respuesta final coherente:
             print(f"🤖 Eva: {response_text}")
             
             # Estadísticas
-            print(f"📊 Intención: {final_state.current_intent} (confianza: {final_state.confidence:.2f})")
-            if final_state.tools_used:
-                print(f"🔧 Herramientas usadas: {', '.join(final_state.tools_used)}")
+            print(f"📊 Intención: {final_state['current_intent']} (confianza: {final_state['confidence']:.2f})")
+            if final_state['tools_used']:
+                print(f"🔧 Herramientas usadas: {', '.join(final_state['tools_used'])}")
             
             return response_text
             

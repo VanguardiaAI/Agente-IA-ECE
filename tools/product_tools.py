@@ -5,8 +5,11 @@ Integra búsqueda híbrida (semántica + texto) con base de conocimiento
 
 from typing import List, Dict, Any
 from services.woocommerce import WooCommerceService
-from services.database import db_service
-from services.embedding_service import embedding_service
+from services.database import HybridDatabaseService
+from services.embedding_service import EmbeddingService
+
+# NO usar instancias globales - crear nuevas instancias en cada llamada
+# para evitar problemas de conexión en el contexto de FastMCP
 
 def register_product_tools(mcp):
     """Registrar herramientas relacionadas con productos"""
@@ -20,16 +23,93 @@ def register_product_tools(mcp):
             limit: Número máximo de resultados
             use_hybrid: Si usar búsqueda híbrida (True) o búsqueda directa en WooCommerce (False)
         """
-        try:
-            if use_hybrid and await db_service.initialized:
-                # Usar búsqueda híbrida en base de conocimiento
-                return await _hybrid_product_search(query, limit)
-            else:
-                # Fallback a búsqueda directa en WooCommerce
-                return await _direct_wc_search(query, limit)
+        import asyncio
+        
+        # Intentar con reintentos para manejar problemas de conexión
+        max_retries = 3
+        retry_delay = 0.5
+        
+        for attempt in range(max_retries):
+            db_service = None
+            embedding_service = None
+            
+            try:
+                # DEBUG: Log del estado de servicios
+                print(f"🔍 search_products called - query: {query}, limit: {limit}, attempt: {attempt + 1}")
                 
-        except Exception as e:
-            return f"❌ Error al buscar productos: {str(e)}"
+                # Crear instancias locales para esta llamada
+                db_service = HybridDatabaseService()
+                embedding_service = EmbeddingService()
+                
+                # Inicializar servicios con timeout
+                print("   ⚠️ Inicializando servicios locales...")
+                await asyncio.wait_for(db_service.initialize(), timeout=5.0)
+                print("   ✅ DB service inicializado")
+                
+                await asyncio.wait_for(embedding_service.initialize(), timeout=5.0)
+                print("   ✅ Embedding service inicializado")
+                
+                # Verificar la conexión
+                if db_service.pool:
+                    try:
+                        count = await asyncio.wait_for(
+                            db_service.pool.fetchval("SELECT COUNT(*) FROM knowledge_base WHERE content_type = 'product'"),
+                            timeout=3.0
+                        )
+                        print(f"   📊 Products in DB: {count}")
+                        
+                        if count == 0:
+                            print("   ⚠️ No hay productos en la base de datos")
+                            # Si no hay productos, usar búsqueda directa de WooCommerce
+                            use_hybrid = False
+                    except asyncio.TimeoutError:
+                        print(f"   ⚠️ Timeout verificando DB, intento {attempt + 1}")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(retry_delay)
+                            continue
+                        return "❌ Error: Timeout al conectar con la base de datos"
+                    except Exception as e:
+                        print(f"   ❌ Error verificando DB: {e}")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(retry_delay)
+                            continue
+                        return f"❌ Error al conectar con la base de datos: {str(e)}"
+                
+                if use_hybrid:
+                    # Usar búsqueda híbrida en base de conocimiento
+                    result = await _hybrid_product_search(query, limit, db_service, embedding_service)
+                    print(f"   📋 Hybrid search returned: {len(result)} chars")
+                    return result
+                else:
+                    # Fallback a búsqueda directa en WooCommerce
+                    result = await _direct_wc_search(query, limit)
+                    print(f"   📋 Direct search returned: {len(result)} chars")
+                    return result
+                    
+            except asyncio.TimeoutError:
+                print(f"   ⚠️ Timeout en intento {attempt + 1}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                    continue
+                return "❌ Error: Timeout al buscar productos"
+            except Exception as e:
+                import traceback
+                print(f"   ❌ Error en intento {attempt + 1}: {str(e)}")
+                print(f"   ❌ Traceback: {traceback.format_exc()}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                    continue
+                return f"❌ Error al buscar productos: {str(e)}"
+            finally:
+                # Cerrar conexiones
+                try:
+                    if db_service and db_service.initialized and db_service.pool:
+                        await db_service.pool.close()
+                        print("   🔒 DB connection closed")
+                except Exception as e:
+                    print(f"   ⚠️ Error cerrando conexión: {e}")
+        
+        return "❌ Error: No se pudo completar la búsqueda después de varios intentos"
     
     @mcp.tool()
     async def get_product_details(product_id: int) -> str:
@@ -153,7 +233,7 @@ def register_product_tools(mcp):
         Ideal para consultas como 'necesito algo para iluminación exterior'
         """
         try:
-            if not await db_service.initialized:
+            if not db_service.initialized or not embedding_service.initialized:
                 return "❌ Base de conocimiento no disponible"
             
             # Generar embedding para la consulta
@@ -196,7 +276,7 @@ def register_product_tools(mcp):
     async def find_similar_products(product_id: int, limit: int = 5) -> str:
         """Encontrar productos similares usando búsqueda vectorial"""
         try:
-            if not await db_service.initialized:
+            if not db_service.initialized:
                 return "❌ Base de conocimiento no disponible"
             
             # Obtener el producto base
@@ -247,29 +327,52 @@ def register_product_tools(mcp):
             return f"❌ Error buscando productos similares: {str(e)}"
 
 # Funciones auxiliares
-async def _hybrid_product_search(query: str, limit: int) -> str:
+async def _hybrid_product_search(query: str, limit: int, db_service: HybridDatabaseService, embedding_service: EmbeddingService) -> str:
     """Realizar búsqueda inteligente combinando WooCommerce y búsqueda híbrida"""
     try:
+        # Verificar que los servicios estén inicializados
+        if not db_service.initialized:
+            return "❌ Error: Servicio de base de datos no inicializado"
+        if not embedding_service.initialized:
+            return "❌ Error: Servicio de embeddings no inicializado"
+            
         # Generar embedding para la consulta
         embedding = await embedding_service.generate_embedding(query)
         
-        # Crear instancia de WooCommerce para la búsqueda inteligente
-        from services.woocommerce import WooCommerceService
-        wc_service = WooCommerceService()
+        # Determinar si es una búsqueda refinada con términos específicos
+        query_lower = query.lower()
+        has_specific_terms = any([
+            'schneider' in query_lower,
+            'legrand' in query_lower,
+            'famatel' in query_lower,
+            any(char.isdigit() for char in query_lower),  # Contiene números
+            'curva' in query_lower,
+            'polo' in query_lower
+        ])
         
-        # Búsqueda inteligente que combina WooCommerce + híbrida
-        results = await db_service.intelligent_product_search(
-            query_text=query,
-            query_embedding=embedding,
-            content_types=["product"],
-            limit=limit,
-            wc_service=wc_service
-        )
+        # Si tiene términos específicos, usar búsqueda refinada
+        if has_specific_terms:
+            results = await db_service.refined_product_search(
+                query_text=query,
+                query_embedding=embedding,
+                limit=limit
+            )
+        else:
+            # Búsqueda híbrida normal
+            results = await db_service.hybrid_search(
+                query_text=query,
+                query_embedding=embedding,
+                content_types=["product"],
+                limit=limit
+            )
         
         if not results:
-            return f"❌ No se encontraron productos para: '{query}'"
+            return f"<!-- PRODUCTS_COUNT:0 -->❌ No se encontraron productos para: '{query}'"
         
-        response = f"🔍 **Resultados inteligentes para: '{query}'**\n\n"
+        # Incluir metadatos para el parser
+        total_count = len(results)
+        response = f"<!-- PRODUCTS_COUNT:{total_count} -->"
+        response += f"🔍 **Resultados inteligentes para: '{query}'** ({total_count} productos encontrados)\n\n"
         
         for i, result in enumerate(results, 1):
             metadata = result.get('metadata', {})

@@ -14,8 +14,10 @@ from typing import List, Dict, Any
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.whatsapp_templates import template_manager
+from services.whatsapp_360dialog_service import whatsapp_service
 from services.woocommerce import WooCommerceService
 from services.database import db_service
+from services.wordpress_db_service import wordpress_db_service
 from config.settings import settings
 
 # Configurar logging
@@ -33,14 +35,21 @@ class CartRecoveryService:
     
     def __init__(self):
         self.db_service = db_service
+        self.wordpress_db = wordpress_db_service
         self.wc_service = WooCommerceService()
         self.template_manager = template_manager
-        self.recovery_window_hours = 24  # Tiempo después del cual considerar abandonado
-        self.cooldown_hours = 48  # No enviar otro mensaje antes de este tiempo
+        self.recovery_window_hours = getattr(settings, 'CART_ABANDONMENT_MINUTES', 20) / 60  # Convertir minutos a horas
+        self.cooldown_hours = getattr(settings, 'CART_RECOVERY_DISCOUNT_HOURS', 48)
         
     async def initialize(self):
         """Inicializa el servicio"""
-        await self.db_service.initialize()
+        try:
+            await self.db_service.initialize()
+        except Exception as e:
+            logger.warning(f"Could not initialize database service: {e}")
+            logger.info("Continuing without database for testing purposes")
+        
+        await self.wordpress_db.initialize()
         logger.info("Cart Recovery Service initialized")
     
     async def get_abandoned_carts(self) -> List[Dict[str, Any]]:
@@ -51,54 +60,114 @@ class CartRecoveryService:
             Lista de carritos abandonados con información del cliente
         """
         try:
-            # Aquí deberías implementar la lógica real para obtener carritos abandonados
-            # Esto puede venir de:
-            # 1. Plugin de carritos abandonados de WooCommerce
-            # 2. Sesiones guardadas en tu base de datos
-            # 3. Webhooks de WooCommerce
+            all_abandoned_carts = []
             
-            # Por ahora, simulamos algunos carritos de ejemplo
-            mock_carts = [
-                {
-                    "cart_id": "cart_123",
-                    "customer_name": "María García",
-                    "customer_email": "maria@example.com",
-                    "customer_phone": "34612345678",
-                    "whatsapp_optin": True,
-                    "abandoned_at": datetime.now() - timedelta(hours=25),
-                    "items": [
-                        {
-                            "name": "Vela de Lavanda Premium",
-                            "quantity": 2,
-                            "price": 15.99
-                        },
-                        {
-                            "name": "Difusor de Aromas",
-                            "quantity": 1,
-                            "price": 24.99
-                        }
-                    ],
-                    "total": 56.97,
-                    "cart_url": f"{settings.WOOCOMMERCE_API_URL}/cart?recover=cart_123"
-                }
-            ]
+            # Intentar obtener de CartFlows primero
+            cartflows_carts = await self.wordpress_db.get_abandoned_carts_from_cartflows(
+                hours_ago=int(self.recovery_window_hours)
+            )
             
-            # Filtrar carritos que cumplan condiciones
-            abandoned_carts = []
-            for cart in mock_carts:
-                # Verificar que el carrito esté abandonado hace más del tiempo configurado
-                time_abandoned = datetime.now() - cart["abandoned_at"]
-                if time_abandoned.total_seconds() / 3600 >= self.recovery_window_hours:
-                    # Verificar que no se haya enviado un mensaje recientemente
-                    if not await self._check_recent_message(cart["customer_phone"]):
-                        abandoned_carts.append(cart)
+            if cartflows_carts:
+                logger.info(f"Found {len(cartflows_carts)} carts from CartFlows")
+                for cart in cartflows_carts:
+                    # Formatear para nuestro sistema
+                    formatted_cart = {
+                        "cart_id": cart['cart_id'],
+                        "customer_name": cart['customer_name'] or cart['email'].split('@')[0],
+                        "customer_email": cart['email'],
+                        "customer_phone": self._normalize_phone(cart['phone']),
+                        "whatsapp_optin": True,  # Asumir opt-in si tienen teléfono
+                        "abandoned_at": cart['abandoned_at'],
+                        "items": cart['items'],
+                        "total": cart['total'],
+                        "cart_url": f"{settings.WOOCOMMERCE_URL}/checkout/?recover={cart['cart_id']}"
+                    }
+                    
+                    # Solo agregar si tiene número de teléfono válido
+                    if formatted_cart['customer_phone']:
+                        all_abandoned_carts.append(formatted_cart)
             
-            logger.info(f"Found {len(abandoned_carts)} abandoned carts eligible for recovery")
-            return abandoned_carts
+            # Si no hay de CartFlows, intentar obtener de sesiones de WooCommerce
+            if not all_abandoned_carts:
+                woo_carts = await self.wordpress_db.get_abandoned_carts_from_woocommerce(
+                    hours_ago=int(self.recovery_window_hours)
+                )
+                
+                if woo_carts:
+                    logger.info(f"Found {len(woo_carts)} carts from WooCommerce sessions")
+                    # Procesar carritos de WooCommerce (necesita más trabajo para extraer datos)
+            
+            # Si aún no hay carritos reales y estamos en desarrollo, usar mock data
+            if not all_abandoned_carts and settings.ENVIRONMENT == 'development':
+                logger.warning("No real abandoned carts found, using mock data for testing")
+                # Usar número de México para pruebas
+                test_phone = "525610830260"  # Número de prueba de México
+                all_abandoned_carts = [
+                    {
+                        "cart_id": "test_cart_mx_123",
+                        "customer_name": "Cliente Prueba México",
+                        "customer_email": "prueba@vanguardia.dev", 
+                        "customer_phone": test_phone,
+                        "whatsapp_optin": True,
+                        "abandoned_at": datetime.now() - timedelta(hours=2),
+                        "items": [
+                            {
+                                "name": "Cable THHN 12 AWG Rojo (100m)",
+                                "quantity": 2,
+                                "price": 45.50
+                            },
+                            {
+                                "name": "Contacto Duplex Polarizado",
+                                "quantity": 5,
+                                "price": 12.80
+                            }
+                        ],
+                        "total": 155.00,
+                        "cart_url": f"{settings.WOOCOMMERCE_URL}/cart?recover=test_cart_mx_123"
+                    }
+                ]
+            
+            # Filtrar carritos elegibles
+            eligible_carts = []
+            for cart in all_abandoned_carts:
+                # Verificar que no se haya enviado un mensaje recientemente
+                if not await self._check_recent_message(cart["customer_phone"]):
+                    eligible_carts.append(cart)
+                else:
+                    logger.info(f"Skipping cart {cart['cart_id']} - recent message sent")
+            
+            logger.info(f"Found {len(eligible_carts)} abandoned carts eligible for recovery")
+            return eligible_carts
             
         except Exception as e:
             logger.error(f"Error getting abandoned carts: {e}")
             return []
+    
+    def _normalize_phone(self, phone: str) -> str:
+        """
+        Normaliza el número de teléfono al formato esperado
+        
+        Args:
+            phone: Número de teléfono
+            
+        Returns:
+            Número normalizado o cadena vacía si no es válido
+        """
+        if not phone:
+            return ""
+            
+        # Eliminar caracteres no numéricos
+        phone = ''.join(filter(str.isdigit, phone))
+        
+        # Si no empieza con código de país, agregar el de España (34)
+        if len(phone) == 9 and phone[0] in ['6', '7']:
+            phone = '34' + phone
+        
+        # Validar longitud mínima
+        if len(phone) < 10:
+            return ""
+            
+        return phone
     
     async def _check_recent_message(self, phone_number: str) -> bool:
         """
@@ -167,8 +236,8 @@ class CartRecoveryService:
                         logger.info(f"[DRY RUN] Would send cart recovery to {cart['customer_phone']} - {cart['customer_name']}")
                         stats["messages_sent"] += 1
                     else:
-                        # Enviar mensaje real
-                        result = await self.template_manager.send_cart_recovery(
+                        # Enviar mensaje real con plantilla multimedia
+                        result = await self.template_manager.send_cart_recovery_multimedia(
                             phone_number=cart["customer_phone"],
                             cart_data=cart_data
                         )
@@ -197,6 +266,85 @@ class CartRecoveryService:
         except Exception as e:
             logger.error(f"Error in cart recovery process: {e}")
             raise
+    
+    async def _send_enhanced_cart_recovery(self, phone_number: str, cart_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Envía mensaje de recuperación con formato visual mejorado
+        """
+        try:
+            # Opción 1: Intentar enviar con imagen y caption (no requiere aprobación)
+            customer_name = cart_data.get("customer_name", "").split()[0] if cart_data.get("customer_name") else "Cliente"
+            items = cart_data.get("items", [])
+            total = cart_data.get("total", 0)
+            discount_code = cart_data.get("discount_code", "DESCUENTOEXPRESS")
+            cart_url = cart_data.get("cart_url", "")
+            
+            # Formatear productos como en la imagen de referencia
+            product_lines = []
+            for item in items[:5]:  # Máximo 5 productos
+                name = item.get('name', 'Producto')
+                sku = item.get('sku', '')
+                quantity = item.get('quantity', 1)
+                
+                if sku:
+                    line = f"- {name} ({sku})"
+                else:
+                    line = f"- {name}"
+                
+                if quantity > 1:
+                    line += f" x{quantity}"
+                    
+                product_lines.append(line)
+            
+            # Crear el mensaje con formato similar a la imagen
+            caption = f"""¡Hola {customer_name}! 👋
+
+No te olvides de completar tu compra. Hemos guardado estos productos para ti:
+
+{chr(10).join(product_lines)}
+
+💰 Total: {total:.2f} €
+
+🎁 ¡OFERTA ESPECIAL!
+Usa el código {discount_code} y obtén un 5% de descuento
+
+⏰ Válido solo por 24 horas
+
+¿Necesitas ayuda? Responde a este mensaje.
+
+🛒 Completa tu compra aquí:
+{cart_url}"""
+
+            # URL del logo de El Corte Eléctrico
+            logo_url = getattr(settings, 'COMPANY_LOGO_URL', 'https://elcorteelectrico.es/wp-content/uploads/2023/01/logo-el-corte-electrico.png')
+            
+            # Intentar enviar con imagen
+            try:
+                result = await whatsapp_service.send_image_message(
+                    to=phone_number,
+                    image_url=logo_url,
+                    caption=caption
+                )
+                logger.info(f"Sent enhanced cart recovery with image to {phone_number}")
+                return result
+            except Exception as img_error:
+                logger.warning(f"Could not send image message: {img_error}")
+                
+                # Fallback: enviar solo texto
+                result = await whatsapp_service.send_text_message(
+                    to=phone_number,
+                    text=caption
+                )
+                logger.info(f"Sent text-only cart recovery to {phone_number}")
+                return result
+                
+        except Exception as e:
+            logger.error(f"Error in enhanced cart recovery: {e}")
+            # Último fallback: usar plantilla aprobada
+            return await self.template_manager.send_cart_recovery(
+                phone_number=phone_number,
+                cart_data=cart_data
+            )
     
     async def _log_recovery_sent(self, cart: Dict[str, Any]):
         """

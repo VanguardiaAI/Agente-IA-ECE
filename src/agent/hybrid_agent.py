@@ -26,8 +26,9 @@ from services.knowledge_base import knowledge_service
 from services.conversation_memory import memory_service
 from services.bot_config_service import bot_config_service
 
-# Importar el sistema multi-agente
+# Importar el sistema multi-agente y el refinador de búsqueda
 from .multi_agent_system import CustomerServiceMultiAgent, ConversationContext
+from .search_refiner_agent import search_refiner, RefinementState
 
 # Importar utilidades de WhatsApp
 from src.utils.whatsapp_utils import format_escalation_message
@@ -130,9 +131,10 @@ class HybridCustomerAgent:
                     bot_name=self.bot_name,
                     company_name=self.company_name
                 )
-                # Nota: Comentado temporalmente hasta revisar multi_agent_system
-                # await self.multi_agent_system.initialize_mcp_client()
-                self.logger.info("✅ Sistema multi-agente preparado")
+                # Inicializar MCP client y construir el grafo de agentes
+                await self.multi_agent_system.initialize_mcp_client()
+                await self.multi_agent_system.build_agent_graph()
+                self.logger.info("✅ Sistema multi-agente inicializado y listo")
             except Exception as e:
                 self.logger.warning(f"⚠️ Error inicializando multi-agente: {e}")
                 self.enable_multi_agent = False
@@ -186,8 +188,16 @@ class HybridCustomerAgent:
         print(f"🎯 Estrategia seleccionada: {strategy}")
         
         # Procesar según la estrategia
-        if strategy == "multi_agent" and self.enable_multi_agent and self.multi_agent_system:
-            response = await self._process_with_multi_agent(message, platform)
+        if strategy == "multi_agent":
+            # Log debug info
+            self.logger.info(f"🔍 Multi-agent check: enabled={self.enable_multi_agent}, system={self.multi_agent_system is not None}")
+            
+            if self.enable_multi_agent and self.multi_agent_system:
+                response = await self._process_with_multi_agent(message, platform)
+            else:
+                # Fallback: usar _process_with_multi_agent directamente sin multi_agent_system
+                self.logger.info("⚠️ Multi-agent system no disponible, usando proceso directo con agente inteligente")
+                response = await self._process_with_multi_agent(message, platform)
         elif strategy == "tool_assisted":
             response = await self._process_with_tools(message, platform)
         elif strategy == "quick_response":
@@ -306,11 +316,49 @@ class HybridCustomerAgent:
             })()
     
     async def _determine_response_strategy(self, message: str) -> str:
-        """Determina la estrategia de respuesta usando IA"""
+        """Determina la estrategia de respuesta de forma simple y rápida"""
+        
+        # IMPORTANTE: Verificar primero si hay un contexto de refinamiento activo
+        session_id = self.conversation_state.session_id or "default_session"
+        refiner_context = search_refiner.contexts.get(session_id)
+        
+        if refiner_context and refiner_context.current_state.value != "idle":
+            # Si estamos en medio de un refinamiento, SIEMPRE usar multi_agent
+            self.logger.info(f"🔄 Contexto de refinamiento activo detectado - forzando estrategia multi_agent")
+            return "multi_agent"
         
         # Validar mensaje de entrada
         if not message or not message.strip():
             return "quick_response"
+            
+        # SIMPLIFICACIÓN: Análisis rápido basado en palabras clave
+        message_lower = message.lower()
+        
+        # Saludos simples
+        if message_lower in ['hola', 'buenos días', 'buenas tardes', 'buenas noches', 'adiós', 'gracias']:
+            return "quick_response"
+            
+        # Palabras clave que indican búsqueda de productos
+        product_keywords = [
+            'busco', 'necesito', 'quiero', 'dame', 'muéstrame', 'tienes',
+            'cable', 'diferencial', 'magnetotérmico', 'automático', 'lámpara',
+            'bombilla', 'enrollacables', 'termo', 'calentador', 'radiador',
+            'interruptor', 'enchufe', 'caja', 'tubo', 'brida', 'cintillo',
+            'fusible', 'contactor', 'variador', 'transformador', 'portero',
+            'videoportero', 'telefonillo', 'proyector', 'campana', 'luminaria'
+        ]
+        
+        # Si contiene alguna palabra clave de producto, usar multi_agent
+        if any(keyword in message_lower for keyword in product_keywords):
+            self.logger.info(f"🛒 Detectada búsqueda de productos - usando multi_agent")
+            return "multi_agent"
+            
+        # Si menciona pedido o email, usar tool_assisted
+        if '@' in message or any(word in message_lower for word in ['pedido', 'orden', 'compra', 'factura']):
+            return "tool_assisted"
+            
+        # Por defecto, usar standard_response
+        return "standard_response"
             
         # Truncar mensajes muy largos para el análisis
         analysis_message = message[:1000] + "..." if len(message) > 1000 else message
@@ -330,15 +378,16 @@ ESTRATEGIAS DISPONIBLES:
 1. quick_response: Para saludos simples, despedidas, agradecimientos
    - Ejemplos: "Hola", "Gracias", "Adiós", "Buenos días"
 
-2. tool_assisted: Para cuando necesitas acceder a datos del sistema
-   - Búsqueda de productos NUEVOS (NO mencionados previamente)
+2. tool_assisted: Para cuando necesitas acceder a datos del sistema (NO productos)
    - Consultas de pedidos (cuando menciona email o número de pedido)
-   - Verificar stock o precios de productos NO mostrados aún
    - Preguntas frecuentes (FAQ) sobre políticas, horarios, envíos, devoluciones
    - Información de la base de conocimiento de la empresa
 
-3. multi_agent: Para consultas complejas con múltiples intenciones
-   - Ejemplos: "Quiero comprar velas Y consultar mi pedido", consultas con múltiples preguntas
+3. multi_agent: Para búsquedas de productos y consultas complejas
+   - Búsqueda de productos NUEVOS (NO mencionados previamente)
+   - Verificar stock o precios de productos NO mostrados aún
+   - Consultas complejas con múltiples intenciones
+   - Ejemplos: "cables", "diferenciales", "busco productos", "necesito un cable"
 
 4. standard_response: Para responder sobre información YA PRESENTADA o disponible en contexto
    - Selección entre productos ya mostrados ("el más barato", "el primero", "el segundo")
@@ -350,7 +399,8 @@ ESTRATEGIAS DISPONIBLES:
 REGLAS CRÍTICAS:
 - Si se mostraron productos y el usuario hace referencia a ellos, USA standard_response
 - Referencias a productos mostrados incluyen: "el más barato", "el primero", "ese", "el de X precio", "quiero el", etc.
-- Solo usa tool_assisted para búsquedas de productos COMPLETAMENTE NUEVOS
+- Para búsquedas de productos NUEVOS usa multi_agent (para activar refinamiento si hay muchos resultados)
+- Palabras clave de productos: "cable", "diferencial", "busco", "necesito", "quiero comprar", etc. → multi_agent
 - Analiza TODO el contexto - si hay productos en la conversación reciente, probablemente se refiere a ellos
 
 RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, multi_agent, o standard_response
@@ -407,11 +457,241 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
     # ELIMINADO: _fallback_strategy_selection - La IA siempre debe decidir, no usar fallbacks mecánicos
     
     async def _process_with_multi_agent(self, message: str, platform: str = "whatsapp") -> str:
-        """Procesa usando el sistema multi-agente"""
+        """Procesa búsquedas de productos con lógica de refinamiento integrada"""
         try:
-            return await self.multi_agent_system.process_message(message)
+            # Obtener session_id para mantener contexto
+            session_id = self.conversation_state.session_id or "default_session"
+            
+            # PASO 1: Verificar si hay un contexto de refinamiento activo
+            refiner_context = search_refiner.contexts.get(session_id)
+            
+            if refiner_context and refiner_context.current_state.value != "idle":
+                # Estamos en medio de un refinamiento
+                self.logger.info(f"🔄 Refinamiento activo detectado para sesión {session_id}")
+                self.logger.info(f"   Estado: {refiner_context.current_state.value}")
+                self.logger.info(f"   Query original: {refiner_context.original_query}")
+                
+                # Refinar la consulta con la respuesta del usuario
+                refined_query = search_refiner.refine_query_with_response(
+                    session_id=session_id,
+                    user_response=message,
+                    original_query=refiner_context.original_query
+                )
+                
+                self.logger.info(f"🎯 Query refinada: '{refined_query}'")
+                
+                # Ahora buscar con la query refinada
+                return await self._handle_refined_search(refined_query, platform, session_id)
+            
+            # PASO 2: Es una nueva búsqueda - usar el agente inteligente
+            self.logger.info(f"🔍 Nueva búsqueda de productos: '{message}'")
+            
+            # Usar el nuevo agente inteligente para entender la petición
+            from services.intelligent_search_agent import intelligent_search
+            
+            self.logger.info("🚀 INICIANDO ANÁLISIS INTELIGENTE CON IA")
+            self.logger.info(f"   📝 Mensaje del usuario: '{message}'")
+            
+            # El agente inteligente entiende CUALQUIER petición del usuario
+            user_analysis = await intelligent_search.understand_user_request(message)
+            
+            # Usar la query optimizada por la IA
+            query_to_use = user_analysis.get('search_query', '')
+            intent = user_analysis.get('intent', 'comprar')
+            
+            self.logger.info(f"🤖 ANÁLISIS INTELIGENTE COMPLETADO:")
+            self.logger.info(f"   📝 Query original: {message}")
+            self.logger.info(f"   🎯 Query optimizada: {query_to_use}")
+            self.logger.info(f"   📦 Tipo de producto: {user_analysis.get('product_type', 'N/A')}")
+            self.logger.info(f"   🏷️ Marca detectada: {user_analysis.get('brand', 'N/A')}")
+            self.logger.info(f"   🔧 Especificaciones: {user_analysis.get('specifications', {})}")
+            self.logger.info(f"   💡 Intención: {intent}")
+            self.logger.info(f"   🏢 Contexto: {user_analysis.get('context', 'N/A')}")
+            
+            # VERIFICACIÓN CRÍTICA: Si no hay query o es una confirmación, NO buscar
+            if not query_to_use or query_to_use.strip() == '' or intent == 'confirmación':
+                self.logger.info("⚠️ No hay producto que buscar (confirmación o query vacía)")
+                # Generar respuesta contextual sin buscar
+                if intent == 'confirmación':
+                    return "Perfecto, ¿hay algo más en lo que pueda ayudarte?"
+                else:
+                    return "No entendí qué producto buscas. ¿Podrías ser más específico?"
+            
+            # Generar embedding y buscar (incluir categorías para detectar matches de categorías)
+            embedding = await self.embedding_service.generate_embedding(query_to_use)
+            results = await self.db_service.hybrid_search(
+                query_text=query_to_use,
+                query_embedding=embedding,
+                content_types=["product", "category"],  # Incluir categorías para detectar matches
+                limit=30  # Buscar más para poder evaluar si hay demasiados
+            )
+            
+            self.logger.info(f"📦 Encontrados {len(results)} productos")
+            
+            # PASO 3: Si el usuario especificó una marca, mostrar productos directamente
+            if user_analysis.get('brand') and results:
+                # Con marca específica, mostrar directamente los mejores resultados
+                self.logger.info(f"✅ Marca detectada, mostrando {min(5, len(results))} productos directamente")
+                # Tomar solo los primeros 5 resultados (ya vienen ordenados por score)
+                top_results = results[:5]
+                return self._format_product_results(top_results, message, platform)
+            
+            # PASO 4: Usar IA para decidir si refinar o mostrar productos
+            # No más lógica rígida, la IA decide basándose en el contexto
+            
+            # Filtrar solo productos (quitar categorías)
+            product_results = [r for r in results if r.get('content_type') != 'category']
+            
+            # PASO CRÍTICO: Validar que los productos sean relevantes
+            from services.product_validator_agent import product_validator
+            
+            self.logger.info(f"🔍 Validando relevancia de {len(product_results)} productos...")
+            validated_products, validation_message = await product_validator.validate_products(
+                user_request=message,
+                products=product_results,
+                max_products=10
+            )
+            
+            if not validated_products:
+                # No hay productos relevantes
+                self.logger.warning(f"⚠️ Ningún producto pasó la validación")
+                if validation_message:
+                    return validation_message
+                else:
+                    # Intentar con una búsqueda más amplia
+                    return f"No encontré productos que coincidan exactamente con '{message}'. ¿Podrías ser más específico o usar otros términos?"
+            
+            self.logger.info(f"✅ {len(validated_products)} productos validados como relevantes")
+            
+            if len(validated_products) <= 5:
+                # Pocos resultados relevantes, mostrar directamente
+                self.logger.info(f"✅ Mostrando {len(validated_products)} productos directamente")
+                return self._format_product_results(validated_products, message, platform)
+            
+            if len(validated_products) > 5:
+                # Muchos resultados validados - dejar que la IA decida si refinar
+                from services.intelligent_search_agent import intelligent_search
+                
+                needs_refinement, refinement_message = await intelligent_search.should_refine_results(
+                    validated_products,
+                    user_analysis
+                )
+                
+                
+                if needs_refinement and refinement_message:
+                    self.logger.info(f"🔄 Iniciando refinamiento inteligente")
+                    # Guardar contexto para el refinamiento
+                    refiner_context = search_refiner.get_or_create_context(
+                        session_id=session_id,
+                        query=message
+                    )
+                    refiner_context.last_search_results = validated_products
+                    refiner_context.original_query = message
+                    return refinement_message
+                else:
+                    # La IA decidió mostrar productos directamente
+                    self.logger.info(f"✅ Mostrando los 5 mejores de {len(validated_products)} productos validados")
+                    return self._format_product_results(validated_products[:5], message, platform)
+            
+            # PASO 4: No necesita refinamiento o hay pocos resultados
+            if not results:
+                # Si no hay resultados, usar IA para generar una respuesta inteligente
+                self.logger.info(f"❌ No se encontraron productos para '{message}'")
+                
+                # Usar el LLM para entender qué buscaba el usuario y sugerir alternativas
+                return await self._generate_intelligent_not_found_response(message, platform)
+            
+            # Si encontramos productos irrelevantes, también informar claramente
+            if results:
+                # Primero, verificar si tenemos categorías con alta puntuación
+                category_results = []
+                product_results = []
+                for result in results:
+                    content_type = result.get('content_type', '')
+                    if content_type == 'category':
+                        category_results.append(result)
+                    else:
+                        product_results.append(result)
+                
+                # Si tenemos una categoría con puntuación muy alta (>900), es probable que sea lo que busca el usuario
+                high_score_category = None
+                for cat in category_results:
+                    score = cat.get('_score', 0)
+                    if score > 900:
+                        high_score_category = cat
+                        self.logger.info(f"✅ Encontrada categoría con alta puntuación ({score}): {cat.get('title')}")
+                        break
+                
+                # Si encontramos una categoría relevante, buscar productos de esa categoría
+                if high_score_category:
+                    category_title = high_score_category.get('title', '')
+                    self.logger.info(f"🔍 Buscando productos de la categoría: {category_title}")
+                    
+                    # Buscar productos de esta categoría específica
+                    category_embedding = await self.embedding_service.generate_embedding(category_title)
+                    category_products = await self.db_service.hybrid_search(
+                        query_text=category_title,
+                        query_embedding=category_embedding,
+                        content_types=["product"],
+                        limit=10
+                    )
+                    
+                    if category_products:
+                        self.logger.info(f"✅ Encontrados {len(category_products)} productos en la categoría {category_title}")
+                        results = category_products
+                    else:
+                        # Si no hay productos en la categoría, seguir con la lógica original
+                        self.logger.info(f"⚠️ No se encontraron productos en la categoría {category_title}")
+                
+                # Si no hay categoría con alta puntuación, verificar relevancia de productos
+                if not high_score_category and product_results:
+                    # Verificar si los resultados son relevantes
+                    relevant_results = []
+                    search_terms = message.lower().split()
+                    
+                    # Agregar sinónimos comunes para mejorar la búsqueda
+                    synonym_map = {
+                        "recoge": ["enrolla", "recoge", "carrete"],
+                        "cables": ["cable", "cables"],
+                        "recogecables": ["enrollacables", "recogecables", "carrete", "enrollador"],
+                        "enrollacables": ["enrollacables", "recogecables", "carrete", "enrollador"]
+                    }
+                    
+                    # Expandir términos de búsqueda con sinónimos
+                    expanded_terms = []
+                    for term in search_terms:
+                        expanded_terms.append(term)
+                        if term in synonym_map:
+                            expanded_terms.extend(synonym_map[term])
+                    
+                    for result in product_results[:20]:
+                        title_lower = result.get('title', '').lower()
+                        content_lower = result.get('content', '').lower()
+                        metadata = result.get('metadata', {})
+                        
+                        # Verificar con términos expandidos
+                        if any(term in title_lower or term in content_lower for term in expanded_terms):
+                            relevant_results.append(result)
+                    
+                    # Si no hay resultados relevantes, informar claramente
+                    if not relevant_results:
+                        self.logger.info(f"❌ Los {len(results)} productos encontrados no son relevantes para '{message}'")
+                        if platform == "wordpress":
+                            return f"<p>No encontré <strong>{message}</strong> en nuestro catálogo.</p><p>En El Corte Eléctrico tenemos:</p><ul><li>Cables eléctricos de todo tipo</li><li>Diferenciales y magnetotérmicos</li><li>Mecanismos (interruptores, enchufes)</li><li>Iluminación LED</li><li>Material de distribución</li></ul><p>¿Qué material eléctrico necesitas?</p>"
+                        else:
+                            return f"No encontré {message} en nuestro catálogo.\n\nTenemos:\n• Cables eléctricos\n• Diferenciales\n• Mecanismos\n• Iluminación LED\n• Material de distribución\n\n¿Qué material eléctrico necesitas?"
+                    
+                    # Usar solo resultados relevantes
+                    results = relevant_results[:10]
+            
+            # Formatear y devolver resultados
+            if len(results) > 5:
+                results = await search_optimizer.optimize_search_results(message, results, limit=5)
+            
+            return self._format_product_results(results, message, platform)
+            
         except Exception as e:
-            print(f"⚠️ Error en multi-agente: {e}")
+            self.logger.error(f"⚠️ Error en búsqueda con refinamiento: {e}")
             
             # Si el usuario está pidiendo hablar con alguien, escalar directamente
             message_lower = message.lower()
@@ -425,6 +705,458 @@ RESPONDE SOLO con el nombre de la estrategia: quick_response, tool_assisted, mul
                     return format_escalation_message(reason=reason, context={"suggested_message": suggested}, platform=platform)
             
             return await self._process_standard_response(message, platform)
+    
+    async def _handle_refined_search(self, refined_query: str, platform: str, session_id: str) -> str:
+        """Maneja la búsqueda con la query refinada"""
+        try:
+            self.logger.info(f"🔍 Búsqueda refinada: '{refined_query}'")
+            
+            # Obtener el contexto de refinamiento que tiene los resultados originales
+            refiner_context = search_refiner.contexts.get(session_id)
+            
+            if refiner_context and refiner_context.last_search_results:
+                # En lugar de filtrar estrictamente, hacer una nueva búsqueda combinando la query original con el refinamiento
+                self.logger.info(f"📦 Refinando búsqueda con {len(refiner_context.last_search_results)} resultados disponibles")
+                
+                # IMPORTANTE: Detectar marca tanto en la query original como en el refinamiento
+                known_brands = {'legrand', 'schneider', 'jung', 'simon', 'siemens', 'ledme', 'saci', 'abb', 'gave', 'chint', 'hager'}
+                original_lower = refiner_context.original_query.lower() if refiner_context.original_query else ""
+                refined_lower = refined_query.lower()
+                
+                # Detectar marca en query original
+                detected_brand_original = None
+                for brand in known_brands:
+                    if brand in original_lower:
+                        detected_brand_original = brand
+                        self.logger.info(f"🏷️ Marca detectada en query original: '{detected_brand_original}'")
+                        break
+                
+                # Detectar marca en el refinamiento
+                detected_brand_refined = None
+                for brand in known_brands:
+                    if brand in refined_lower:
+                        detected_brand_refined = brand
+                        self.logger.info(f"🏷️ Marca detectada en refinamiento: '{detected_brand_refined}'")
+                        break
+                
+                # Usar la marca del refinamiento si existe, sino la original
+                detected_brand = detected_brand_refined or detected_brand_original
+                
+                # Si se especificó una marca nueva que no estaba en los resultados originales
+                new_brand_specified = False
+                if detected_brand_refined and not detected_brand_original:
+                    # Verificar si esta marca estaba en los resultados originales
+                    brand_in_results = False
+                    for result in refiner_context.last_search_results[:10]:  # Check first 10
+                        if detected_brand_refined in result.get('title', '').lower():
+                            brand_in_results = True
+                            break
+                    
+                    if not brand_in_results:
+                        new_brand_specified = True
+                        self.logger.info(f"🆕 Nueva marca especificada que no estaba en resultados originales: '{detected_brand_refined}'")
+                
+                # NUEVO: Detectar si el refinamiento es una especificación técnica pura (números + unidades)
+                import re
+                is_technical_spec = bool(re.match(r'^[\d\s]+\s*(a|amperios?|mm|v|voltios?|w|watts?|ma|miliamperios?)?$', refined_query.lower()))
+                
+                # Si es una especificación técnica, PRIMERO filtrar los resultados originales
+                if is_technical_spec and refiner_context.original_query:
+                    self.logger.info(f"🔧 Refinamiento técnico detectado: '{refined_query}' para '{refiner_context.original_query}'")
+                    
+                    # Extraer números del refinamiento
+                    numbers = re.findall(r'\d+', refined_query)
+                    
+                    # Filtrar resultados originales que contengan el producto original Y la especificación
+                    filtered_results = []
+                    original_term = refiner_context.original_query.lower()
+                    
+                    for result in refiner_context.last_search_results:
+                        title_lower = result.get('title', '').lower()
+                        content_lower = result.get('content', '').lower()
+                        
+                        # Verificar que contenga el término original (automático, diferencial, etc.)
+                        has_original = any(word in title_lower or word in content_lower 
+                                         for word in original_term.split())
+                        
+                        # Verificar que contenga la especificación técnica
+                        has_spec = any(num in title_lower or num in content_lower 
+                                      for num in numbers)
+                        
+                        # Si detectamos marca, verificar que el resultado sea de esa marca
+                        if detected_brand:
+                            has_brand = detected_brand in title_lower or detected_brand in content_lower
+                            if has_original and has_spec and has_brand:
+                                filtered_results.append(result)
+                        else:
+                            if has_original and has_spec:
+                                filtered_results.append(result)
+                    
+                    if filtered_results:
+                        self.logger.info(f"✅ Encontrados {len(filtered_results)} productos con especificación técnica")
+                        results = filtered_results[:10]
+                    else:
+                        # Si no hay resultados filtrados, continuar con búsqueda combinada
+                        self.logger.info("⚠️ No se encontraron productos con esa especificación, probando búsqueda combinada")
+                        results = []
+                else:
+                    results = []
+                
+                # ESTRATEGIA 0: Si se especificó una marca nueva, buscar directamente con ella
+                if not results and new_brand_specified:
+                    self.logger.info(f"🎯 Estrategia 0: Nueva marca - búsqueda directa con refinamiento completo")
+                    
+                    # Combinar el producto original con el refinamiento completo
+                    # Ej: "diferencial" + "schneider 25A" = "diferencial schneider 25A"
+                    full_query = f"{refiner_context.original_query} {refined_query}"
+                    self.logger.info(f"   Query completa: '{full_query}'")
+                    
+                    # Buscar con la query completa
+                    embedding = await self.embedding_service.generate_embedding(full_query)
+                    results = await self.db_service.hybrid_search(
+                        query_text=full_query,
+                        query_embedding=embedding,
+                        content_types=["product"],
+                        limit=20
+                    )
+                    
+                    if results:
+                        self.logger.info(f"   ✅ Encontrados {len(results)} productos con la nueva marca")
+                        # Filtrar para asegurar que son de la marca especificada
+                        if detected_brand_refined:
+                            brand_filtered = [r for r in results if detected_brand_refined in r.get('title', '').lower()]
+                            if brand_filtered:
+                                results = brand_filtered
+                                self.logger.info(f"   ✅ Filtrados {len(results)} productos de {detected_brand_refined}")
+                
+                # Si no hay resultados o no es especificación técnica, usar estrategia combinada
+                if not results:
+                    # ESTRATEGIA 1: Búsqueda combinada (original + refinamiento)
+                    combined_query = f"{refiner_context.original_query} {refined_query}"
+                    self.logger.info(f"🎯 Estrategia 1: Query combinada: '{combined_query}'")
+                    
+                    from services.search_optimizer import search_optimizer
+                    search_analysis = await search_optimizer.analyze_product_query(combined_query)
+                    optimized_query = search_analysis.get('search_query', combined_query)
+                    
+                    embedding = await self.embedding_service.generate_embedding(optimized_query)
+                    results = await self.db_service.hybrid_search(
+                        query_text=optimized_query,
+                        query_embedding=embedding,
+                        content_types=["product"],
+                        limit=20
+                    )
+                    
+                    # Filtrar por marca si se detectó una
+                    if detected_brand and results:
+                        brand_filtered = [r for r in results if detected_brand in r.get('title', '').lower() or detected_brand in r.get('content', '').lower()]
+                        if brand_filtered:
+                            results = brand_filtered
+                            self.logger.info(f"   Filtrados {len(results)} productos de marca {detected_brand}")
+                
+                # ESTRATEGIA 2: Si no hay resultados, buscar con marca + refinamiento (si hay marca)
+                if not results and detected_brand:
+                    brand_refined_query = f"{detected_brand} {refined_query}"
+                    self.logger.info(f"🔄 Estrategia 2: Búsqueda con marca + refinamiento: '{brand_refined_query}'")
+                    
+                    embedding = await self.embedding_service.generate_embedding(brand_refined_query)
+                    results = await self.db_service.hybrid_search(
+                        query_text=brand_refined_query,
+                        query_embedding=embedding,
+                        content_types=["product"],
+                        limit=20
+                    )
+                
+                # ESTRATEGIA 3: Si no hay resultados y NO hay marca, buscar solo con el refinamiento
+                if not results and not detected_brand:
+                    self.logger.info(f"🔄 Estrategia 3: Búsqueda solo con refinamiento: '{refined_query}'")
+                    
+                    # Buscar solo con el término de refinamiento
+                    embedding = await self.embedding_service.generate_embedding(refined_query)
+                    results = await self.db_service.hybrid_search(
+                        query_text=refined_query,
+                        query_embedding=embedding,
+                        content_types=["product"],
+                        limit=20
+                    )
+                
+                # ESTRATEGIA 4: Búsqueda con sinónimos expandidos
+                if not results:
+                    self.logger.info("🔄 Estrategia 4: Búsqueda con sinónimos expandidos")
+                    
+                    # Expandir la consulta con sinónimos
+                    expanded_queries = search_refiner.expand_query_with_synonyms(refiner_context.original_query)
+                    
+                    for expanded_query in expanded_queries[1:]:  # Saltar el primero que es el original
+                        # Incluir marca si se detectó
+                        if detected_brand:
+                            full_query = f"{detected_brand} {expanded_query} {refined_query}"
+                        else:
+                            full_query = f"{expanded_query} {refined_query}"
+                        self.logger.info(f"   Probando: '{full_query}'")
+                        
+                        embedding = await self.embedding_service.generate_embedding(full_query)
+                        results = await self.db_service.hybrid_search(
+                            query_text=full_query,
+                            query_embedding=embedding,
+                            content_types=["product"],
+                            limit=20
+                        )
+                        
+                        # Filtrar por marca si es necesario
+                        if detected_brand and results:
+                            brand_filtered = [r for r in results if detected_brand in r.get('title', '').lower() or detected_brand in r.get('content', '').lower()]
+                            if brand_filtered:
+                                results = brand_filtered
+                        
+                        if results:
+                            self.logger.info(f"   ✅ Encontrados {len(results)} resultados con sinónimos")
+                            break
+                
+                # ESTRATEGIA 5: Filtrado flexible en resultados originales
+                if not results:
+                    self.logger.info("🔄 Estrategia 5: Filtrado flexible en resultados originales")
+                    
+                    # Extraer números y especificaciones técnicas
+                    import re
+                    numbers = re.findall(r'\d+', refined_query)
+                    
+                    # Si hay números, buscar en los resultados originales
+                    if numbers and refiner_context.last_search_results:
+                        filtered_results = []
+                        for result in refiner_context.last_search_results:
+                            title = result.get('title', '').lower()
+                            content = result.get('content', '').lower()
+                            refined_lower = refined_query.lower()
+                            
+                            # Si hay marca detectada, verificar que el producto sea de esa marca
+                            if detected_brand:
+                                if detected_brand not in title and detected_brand not in content:
+                                    continue  # Saltar productos que no son de la marca
+                            
+                            # Buscar números o términos del refinamiento
+                            match_found = False
+                            for num in numbers:
+                                if num in title or num in content:
+                                    match_found = True
+                                    break
+                            
+                            # También buscar términos no numéricos del refinamiento
+                            if not match_found:
+                                words = refined_lower.split()
+                                for word in words:
+                                    if len(word) > 2 and (word in title or word in content):
+                                        match_found = True
+                                        break
+                            
+                            if match_found:
+                                filtered_results.append(result)
+                        
+                        if filtered_results:
+                            self.logger.info(f"✅ Encontrados {len(filtered_results)} productos con filtrado flexible")
+                            results = filtered_results[:10]
+                
+                # Si aún no hay resultados, NO mostrar productos irrelevantes
+                # Es mejor admitir que no hay productos de esa marca/especificación
+                if not results and refiner_context.last_search_results:
+                    self.logger.info("📋 No hay productos que coincidan con el refinamiento")
+                    # NO mostrar productos aleatorios - mantener results vacío
+                
+                self.logger.info(f"✅ Total de resultados para mostrar: {len(results)}")
+                
+            else:
+                # Si no hay contexto, hacer búsqueda normal
+                self.logger.info("⚠️ No hay contexto de refinamiento, haciendo búsqueda normal")
+                embedding = await self.embedding_service.generate_embedding(refined_query)
+                results = await self.db_service.hybrid_search(
+                    query_text=refined_query,
+                    query_embedding=embedding,
+                    content_types=["product"],
+                    limit=10
+                )
+            
+            # Limpiar el contexto de refinamiento ya que completamos el proceso
+            if session_id in search_refiner.contexts:
+                del search_refiner.contexts[session_id]
+                self.logger.info(f"🧹 Contexto de refinamiento limpiado para sesión {session_id}")
+            
+            if not results:
+                # Construir mensaje específico basado en el contexto
+                if refiner_context and refiner_context.original_query:
+                    original_product = refiner_context.original_query
+                    if platform == "wordpress":
+                        return f"<p>No encontré {original_product} con las características que especificaste ({refined_query}). Te sugiero revisar nuestro catálogo completo o contactarnos por WhatsApp para ayudarte a encontrar lo que necesitas.</p>"
+                    else:
+                        return f"No encontré {original_product} con las características que especificaste ({refined_query}). ¿Te puedo ayudar con otra búsqueda o prefieres que te muestre otras opciones disponibles?"
+                else:
+                    # Mensaje genérico si no hay contexto
+                    if platform == "wordpress":
+                        return f"<p>No encontré productos exactos con esas especificaciones. Te sugiero revisar nuestro catálogo completo o contactarnos por WhatsApp para ayudarte a encontrar lo que necesitas.</p>"
+                    else:
+                        return f"No encontré productos exactos con esas especificaciones. ¿Te puedo ayudar con otra búsqueda o prefieres que te muestre opciones similares?"
+            
+            # Formatear y devolver resultados
+            return self._format_product_results(results, refined_query, platform)
+            
+        except Exception as e:
+            self.logger.error(f"Error en búsqueda refinada: {e}")
+            return await self._process_standard_response(refined_query, platform)
+    
+    async def _generate_intelligent_not_found_response(self, query: str, platform: str) -> str:
+        """Genera una respuesta inteligente cuando no se encuentran productos usando IA"""
+        try:
+            # Buscar categorías similares para sugerir
+            embedding = await self.embedding_service.generate_embedding(query)
+            similar_categories = await self.db_service.hybrid_search(
+                query_text=query,
+                query_embedding=embedding,
+                content_types=["category"],
+                limit=5
+            )
+            
+            # Preparar contexto para el LLM
+            categories_context = ""
+            if similar_categories:
+                categories_context = "Categorías relacionadas disponibles: " + ", ".join(
+                    [cat.get('title', '') for cat in similar_categories[:3]]
+                )
+            
+            # Usar el LLM para generar una respuesta inteligente
+            system_prompt = """Eres un asistente de ventas de El Corte Eléctrico, una tienda especializada en material eléctrico.
+            
+            Cuando un usuario busca un producto que no tenemos:
+            1. Identifica qué tipo de producto buscaba
+            2. Si es algo relacionado con electricidad, sugiere alternativas que sí vendemos
+            3. Si no es material eléctrico, explica amablemente nuestro enfoque y sugiere qué sí tenemos
+            4. Sé breve y útil (máximo 2-3 frases)
+            5. NO inventes productos, solo sugiere categorías generales que vendemos
+            
+            Categorías principales que vendemos:
+            - Cables y conductores eléctricos
+            - Automatismos (diferenciales, magnetotérmicos)
+            - Mecanismos (interruptores, enchufes)
+            - Iluminación LED y convencional
+            - Material de distribución eléctrica
+            - Herramientas eléctricas
+            - Domótica y control
+            """
+            
+            user_prompt = f"""El usuario busca: "{query}"
+            
+            {categories_context}
+            
+            Genera una respuesta breve y útil explicando que no encontramos ese producto específico 
+            y sugiriendo alternativas relevantes que sí vendemos."""
+            
+            # Generar respuesta con el LLM
+            import openai
+            response = await self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=150,
+                temperature=0.7
+            )
+            
+            ai_response = response.choices[0].message.content.strip()
+            
+            # Formatear según plataforma
+            if platform == "wordpress":
+                # Convertir a HTML
+                ai_response = f"<p>{ai_response.replace(chr(10) + chr(10), '</p><p>').replace(chr(10), '<br>')}</p>"
+            
+            return ai_response
+            
+        except Exception as e:
+            self.logger.error(f"Error generando respuesta inteligente: {e}")
+            # Fallback a respuesta genérica
+            if platform == "wordpress":
+                return f"<p>No encontré productos que coincidan con '<strong>{query}</strong>'.</p><p>Como especialistas en material eléctrico, te sugiero explorar nuestras categorías principales o contactarnos para ayudarte a encontrar lo que necesitas.</p>"
+            else:
+                return f"No encontré productos que coincidan con '{query}'.\n\nComo especialistas en material eléctrico, te sugiero explorar nuestras categorías principales o contactarnos para ayudarte."
+    
+    def _calculate_relevance_score(self, query: str, result: Dict) -> float:
+        """Calcula un score de relevancia mejorado basado en coincidencias de términos"""
+        query_terms = set(query.lower().split())
+        title_lower = result.get('title', '').lower()
+        content_lower = result.get('content', '').lower()
+        
+        # Score basado en coincidencias exactas en título (peso 2x)
+        title_terms = set(title_lower.split())
+        exact_title_matches = len(query_terms & title_terms)
+        
+        # Score basado en coincidencias parciales en título
+        partial_title_matches = sum(1 for qt in query_terms 
+                                   if any(qt in tt for tt in title_terms))
+        
+        # Score basado en coincidencias en contenido (peso 0.5x)
+        content_terms = set(content_lower.split())
+        content_matches = len(query_terms & content_terms)
+        
+        # Calcular score normalizado
+        if len(query_terms) > 0:
+            score = (exact_title_matches * 2.0 + 
+                    partial_title_matches * 1.0 + 
+                    content_matches * 0.5) / (len(query_terms) * 2.0)
+        else:
+            score = 0.0
+        
+        # Bonus si todos los términos aparecen
+        if exact_title_matches == len(query_terms):
+            score *= 1.5
+        
+        return min(score, 1.0)  # Limitar a máximo 1.0
+    
+    def _format_product_results(self, results: list, query: str, platform: str) -> str:
+        """Formatea los resultados de productos según la plataforma"""
+        # Reordenar resultados por relevancia mejorada
+        for result in results:
+            result['improved_relevance'] = self._calculate_relevance_score(query, result)
+        
+        # Ordenar por relevancia mejorada combinada con score original
+        results.sort(key=lambda x: (
+            x.get('improved_relevance', 0) * 0.4 + 
+            min(float(x.get('rrf_score', 0)) / 1000, 1.0) * 0.6
+        ), reverse=True)
+        
+        if platform == "wordpress":
+            from src.utils.wordpress_utils import format_product_search_response
+            
+            products = []
+            for result in results[:5]:
+                if isinstance(result, dict):
+                    metadata = result.get('metadata', {})
+                    # Asegurar que las imágenes estén en el formato correcto
+                    images = metadata.get('images', [])
+                    if images and isinstance(images[0], dict):
+                        # Ya está en el formato correcto
+                        pass
+                    elif images and isinstance(images[0], str):
+                        # Convertir URLs simples a formato dict
+                        images = [{'src': img} for img in images if img]
+                    
+                    product = {
+                        'name': result.get('title', 'Producto'),
+                        'price': str(metadata.get('price', 0)),
+                        'regular_price': str(metadata.get('regular_price', 0)),
+                        'sale_price': str(metadata.get('sale_price', 0)),
+                        'stock_status': metadata.get('stock_status', 'unknown'),
+                        'permalink': metadata.get('permalink', ''),
+                        'sku': metadata.get('sku', ''),
+                        'images': images
+                    }
+                    products.append(product)
+            
+            if products:
+                # Usar el formato HTML bonito de wordpress_utils
+                return format_product_search_response(products, query)
+            else:
+                return f"<p>Lo siento, encontré productos pero hubo un error al procesarlos.</p>"
+        else:
+            # WhatsApp
+            return format_products_for_whatsapp(results, query)
     
     async def _process_with_tools(self, message: str, platform: str = "whatsapp") -> str:
         """Procesa usando búsqueda híbrida directa y servicios del sistema"""
@@ -572,56 +1304,12 @@ Responde SOLO con la categoría: order_inquiry, stock_check, faq_inquiry, produc
                         additional_info = doc.get('content', '')[:300]  # Primeros 300 caracteres
                         break
             
-            # Formatear respuesta según la plataforma
-            if platform == "wordpress":
-                # Importar utilidades de WordPress
-                from src.utils.wordpress_utils import format_product_search_response
-                
-                # Convertir resultados al formato esperado por las utilidades
-                products = []
-                for result in results[:5]:
-                    # Validar que result sea un diccionario
-                    if isinstance(result, dict):
-                        metadata = result.get('metadata', {})
-                        images = metadata.get('images', [])
-                        
-                        # Debug images format
-                        if images:
-                            self.logger.info(f"Tipo de images: {type(images)}, Primer elemento: {type(images[0]) if images else 'empty'}")
-                        
-                        product = {
-                            'name': result.get('title', 'Producto'),
-                            'price': str(metadata.get('price', 0)),
-                            'regular_price': str(metadata.get('regular_price', 0)),
-                            'sale_price': str(metadata.get('sale_price', 0)),
-                            'stock_status': metadata.get('stock_status', 'unknown'),
-                            'permalink': metadata.get('permalink', ''),
-                            'sku': metadata.get('sku', ''),
-                            'images': images
-                        }
-                        products.append(product)
-                    else:
-                        self.logger.warning(f"Resultado inesperado tipo {type(result)}: {result}")
-                
-                if products:
-                    return format_product_search_response(products, message)
-                else:
-                    return f"<p>Lo siento, encontré productos pero hubo un error al procesarlos. Por favor, intenta de nuevo.</p>"
+            # Formatear respuesta usando el método unificado
+            response = self._format_product_results(results, message, platform)
             
-            else:
-                # Formato para WhatsApp - usar el formateador especializado
-                # Convertir results al formato esperado por el formateador
-                products = []
-                for result in results:
-                    if isinstance(result, dict):
-                        products.append(result)
-                
-                # Usar el formateador especializado para WhatsApp
-                response = format_products_for_whatsapp(products, message)
-                
-                # Agregar información adicional de knowledge base si existe
-                if additional_info:
-                    response += f"\n\n💡 *Información útil:*\n{additional_info}"
+            # Agregar información adicional de knowledge base si existe (solo para WhatsApp)
+            if platform == "whatsapp" and additional_info:
+                response += f"\n\n💡 *Información útil:*\n{additional_info}"
             
             return response
             
@@ -1158,19 +1846,16 @@ INFORMACIÓN CRÍTICA DE LA EMPRESA:
 - Link directo WhatsApp: https://wa.me/34614218122
 
 INSTRUCCIONES IMPORTANTES:
-1. RESPONDE DE FORMA NATURAL Y CONVERSACIONAL, no como un robot
-2. Si el usuario pregunta sobre productos YA MOSTRADOS, responde sobre ESOS productos específicos
-3. NO busques nuevos productos si el usuario está preguntando sobre los que ya viste
-4. Sé específica cuando hables de productos mostrados (usa nombres y precios)
-5. Mantén la conversación fluida con preguntas naturales cuando sea apropiado
-6. Solo escala a WhatsApp si realmente no puedes ayudar
-7. NUNCA prometas avisar al cliente cuando algo esté listo o disponible
-8. NO ofrezcas notificaciones, recordatorios o avisos futuros
-9. Si preguntan por disponibilidad futura, sugiere que consulten más adelante o contacten por WhatsApp
-10. NUNCA INVENTES INFORMACIÓN: Si no conoces un dato específico (como el SKU de un producto), di claramente "No tengo esa información específica" y ofrece buscar productos relacionados
-11. NO HAY TIENDA FÍSICA: Si preguntan por la ubicación o si pueden visitar, aclara que somos solo online
-12. Cuando el usuario pida más información sobre un producto específico, SIEMPRE proporciona el enlace del producto si está disponible
-13. NUNCA menciones cantidades específicas de stock (como "5 unidades"). Solo di "Disponible" o "Sin stock"
+1. SÉ CONCISA: Responde en 2-3 líneas máximo, sin introducciones largas
+2. NO INVENTES URLs ni categorías que no existen
+3. Si no tienes un producto, dilo claramente y sugiere alternativas reales
+4. NUNCA digas cosas como "tenemos una amplia gama de ventiladores" si no es verdad
+5. Solo menciona productos que REALMENTE existen en el catálogo
+6. NO menciones categorías inventadas como "Ventiladores industriales" si no existen
+7. Si no tienes lo que buscan, di "No tenemos [producto] pero tenemos [alternativas reales]"
+8. NUNCA prometas avisar cuando algo esté disponible
+9. NO HAY TIENDA FÍSICA: Solo venta online
+10. Para soporte usa SOLO el WhatsApp: +34 614 21 81 22
 
 INFORMACIÓN DEL CLIENTE:
 - Nombre: {self.conversation_state.context.customer_name or 'Cliente'}

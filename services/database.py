@@ -28,9 +28,11 @@ class HybridDatabaseService:
         try:
             self.pool = await asyncpg.create_pool(
                 settings.DATABASE_URL,
-                min_size=5,
-                max_size=20,
-                command_timeout=60
+                min_size=2,
+                max_size=10,
+                command_timeout=60,
+                max_cached_statement_lifetime=0,  # Desactiva cache de statements
+                statement_cache_size=0  # Sin cache para evitar conflictos
             )
             
             await self._create_schema()
@@ -303,14 +305,67 @@ class HybridDatabaseService:
         # Detectar términos técnicos (solo códigos específicos, NO palabras comunes)
         technical_terms = self._extract_technical_terms(query_text)
         
+        # Detectar marcas conocidas en la consulta
+        brand_terms = self._detect_brand_terms(query_text)
+        
         # Log para debugging
-        logger.info(f"🔍 Búsqueda: '{query_text}' - Términos técnicos: {technical_terms}")
+        logger.info(f"🔍 Búsqueda: '{query_text}' - Términos técnicos: {technical_terms}, Marcas: {brand_terms}")
         
         async with self.pool.acquire() as conn:
             all_results = {}
             
-            # PASO 1: Si hay términos técnicos, buscar PRIMERO productos que los contengan
-            if technical_terms:
+            # PASO 1: Si hay marcas detectadas, buscar PRIMERO productos de esa marca
+            if brand_terms:
+                for brand in brand_terms:
+                    logger.info(f"   🏷️ Buscando productos de marca '{brand}'...")
+                    
+                    # Construir filtro de tipo
+                    type_filter = ""
+                    if content_types:
+                        type_filter = f"AND content_type = ANY(ARRAY{content_types}::text[])"
+                    
+                    # Búsqueda de productos con la marca en el título
+                    brand_query = f"""
+                        SELECT id, title, content, content_type, metadata, external_id
+                        FROM knowledge_base 
+                        WHERE is_active = true 
+                        AND LOWER(title) LIKE '%' || LOWER($1) || '%'
+                        {type_filter}
+                        ORDER BY 
+                            CASE 
+                                WHEN LOWER(title) LIKE LOWER($1) || '%' THEN 1  -- Marca al inicio
+                                WHEN LOWER(title) LIKE '% ' || LOWER($1) || ' %' THEN 2  -- Marca como palabra completa
+                                ELSE 3  -- Marca en cualquier parte
+                            END,
+                            title
+                        LIMIT 50
+                    """
+                    
+                    rows = await conn.fetch(brand_query, brand)
+                    logger.info(f"   ✅ Encontrados {len(rows)} productos de marca '{brand}'")
+                    
+                    for row in rows:
+                        result = dict(row)
+                        if result['metadata']:
+                            result['metadata'] = json.loads(result['metadata']) if isinstance(result['metadata'], str) else result['metadata']
+                        
+                        # Score alto para marcas, mayor si coincide con el resto de la consulta
+                        base_score = 800.0
+                        # Verificar si el producto también coincide con otros términos de la consulta
+                        title_lower = result['title'].lower()
+                        query_words = query_text.lower().split()
+                        matches = sum(1 for word in query_words if word in title_lower)
+                        
+                        result['rrf_score'] = base_score + (matches * 100)
+                        result['match_type'] = 'brand_match'
+                        result['matched_term'] = brand
+                        
+                        # Usar ID como clave para evitar duplicados
+                        if result['id'] not in all_results:
+                            all_results[result['id']] = result
+            
+            # PASO 2: Si hay términos técnicos, buscar productos que los contengan
+            elif technical_terms:
                 for term in technical_terms:
                     # Ignorar palabras comunes que se hayan colado
                     if term.lower() in ['busco', 'quiero', 'necesito', 'un', 'una', 'el', 'la', 'los', 'las']:
@@ -342,7 +397,47 @@ class HybridDatabaseService:
                         result = dict(row)
                         if result['metadata']:
                             result['metadata'] = json.loads(result['metadata']) if isinstance(result['metadata'], str) else result['metadata']
-                        result['rrf_score'] = 1000.0  # Score MUY ALTO para coincidencias exactas en título
+                        
+                        # Calcular score basado en relevancia real
+                        title_lower = result['title'].lower()
+                        query_lower = query_text.lower()
+                        term_lower = term.lower()
+                        
+                        # Score base por contener el término
+                        score = 500.0
+                        
+                        # Bonus si el título contiene la query completa
+                        if query_lower in title_lower:
+                            score += 300.0
+                            
+                        # Bonus por posición del término (al inicio es mejor)
+                        if title_lower.startswith(term_lower):
+                            score += 200.0
+                        elif title_lower.startswith(f"{term_lower} "):
+                            score += 250.0
+                            
+                        # Bonus por coincidencia exacta de palabras
+                        title_words = set(title_lower.split())
+                        query_words = set(query_lower.split())
+                        matching_words = title_words & query_words
+                        score += len(matching_words) * 50.0
+                        
+                        # Penalización si es un producto no relacionado
+                        # Por ejemplo, si busca "ventilador industrial" pero es "ventilador de techo"
+                        if "industrial" in query_lower and "industrial" not in title_lower:
+                            score *= 0.5
+                        elif "industrial" in title_lower and "industrial" in query_lower:
+                            score *= 1.5
+                            
+                        # IMPORTANTE: Si busca "ventilador pared" o "ventilador mural"
+                        # Priorizar ventiladores CON FILTRO (que son de pared) y penalizar los de techo
+                        if ("pared" in query_lower or "mural" in query_lower) and "ventilador" in query_lower:
+                            if "con filtro" in title_lower or "vf" in result.get('metadata', {}).get('sku', '').lower():
+                                score *= 2.0  # Duplicar score para ventiladores con filtro
+                            elif "techo" in title_lower:
+                                score *= 0.3  # Reducir mucho el score para ventiladores de techo
+                            
+                        result['rrf_score'] = min(score, 1000.0)  # Cap en 1000
                         result['match_type'] = 'exact_title'
                         result['matched_term'] = term
                         
@@ -505,28 +600,78 @@ class HybridDatabaseService:
         content_types: List[str] = None,
         limit: int = 10
     ) -> List[Dict[str, Any]]:
-        """Búsqueda puramente textual"""
+        """Búsqueda SIMPLE de texto - simulando búsqueda de WooCommerce"""
         if not self.initialized:
             raise Exception("Base de datos no inicializada")
         
         async with self.pool.acquire() as conn:
+            # Construir filtro de tipo
             type_filter = ""
-            params = [query_text, limit]
+            params = []
+            param_count = 1
             
             if content_types:
-                type_filter = f"AND content_type = ANY(${len(params) + 1})"
+                type_filter = f"AND content_type = ANY(${param_count})"
                 params.append(content_types)
+                param_count += 1
+            
+            # Búsqueda estilo WooCommerce - buscar CADA palabra por separado
+            words = query_text.lower().split()
+            
+            # Construir condiciones para cada palabra
+            conditions = []
+            score_parts = []
+            
+            for i, word in enumerate(words):
+                # Skip palabras muy cortas
+                if len(word) < 2:
+                    continue
+                    
+                word_param = f"${param_count}"
+                params.append(word)
+                param_count += 1
+                
+                # Condición OR para esta palabra
+                conditions.append(f"""
+                    (LOWER(title) LIKE '%' || {word_param} || '%' OR 
+                     LOWER(content) LIKE '%' || {word_param} || '%')
+                """)
+                
+                # Puntuación por palabra - mayor peso para palabras en título
+                score_parts.append(f"""
+                    (CASE WHEN LOWER(title) LIKE '%' || {word_param} || '%' THEN 2.0 ELSE 0 END +
+                     CASE WHEN LOWER(content) LIKE '%' || {word_param} || '%' THEN 0.5 ELSE 0 END)
+                """)
+            
+            # Si no hay palabras válidas, usar la query completa
+            if not conditions:
+                conditions.append(f"""
+                    (LOWER(title) LIKE '%' || ${param_count} || '%' OR 
+                     LOWER(content) LIKE '%' || ${param_count} || '%')
+                """)
+                score_parts.append("1.0")
+                params.append(query_text.lower())
+                param_count += 1
+            
+            # Combinar condiciones con OR (al menos una palabra debe estar presente)
+            # Esto es más flexible y encuentra más resultados relevantes
+            where_clause = " OR ".join(conditions)
+            
+            # Sumar scores de todas las palabras
+            score_calc = " + ".join(score_parts)
             
             query = f"""
                 SELECT id, title, content, content_type, metadata, external_id,
-                       ts_rank_cd(search_vector, plainto_tsquery('spanish', $1)) as score
+                       ({score_calc}) as score
                 FROM knowledge_base 
                 WHERE is_active = true 
-                AND search_vector @@ plainto_tsquery('spanish', $1)
+                AND {where_clause}
                 {type_filter}
-                ORDER BY ts_rank_cd(search_vector, plainto_tsquery('spanish', $1)) DESC
-                LIMIT $2
+                ORDER BY score DESC, title ASC
+                LIMIT ${param_count}
             """
+            
+            params.append(limit)
             
             rows = await conn.fetch(query, *params)
             
@@ -538,6 +683,20 @@ class HybridDatabaseService:
                 results.append(result)
             
             return results
+    
+    async def refined_product_search(
+        self,
+        query_text: str,
+        query_embedding: List[float],
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Búsqueda refinada de productos"""
+        return await self.hybrid_search(
+            query_text=query_text,
+            query_embedding=query_embedding,
+            content_types=["product"],
+            limit=limit
+        )
     
     async def get_by_external_id(self, external_id: str) -> Optional[Dict[str, Any]]:
         """Obtener conocimiento por ID externo"""
@@ -720,6 +879,28 @@ class HybridDatabaseService:
             """)
             
             return result['last_sync'] if result and result['last_sync'] else None
+    
+    def _detect_brand_terms(self, query_text: str) -> List[str]:
+        """Detectar marcas conocidas en la consulta"""
+        # Marcas comunes en material eléctrico
+        known_brands = {
+            'legrand', 'schneider', 'jung', 'simon', 'niessen', 'abb', 'siemens',
+            'hager', 'gewiss', 'bticino', 'orbis', 'finder', 'chint', 'ide',
+            'ledme', 'ledvance', 'philips', 'osram', 'sylvania', 'megalux',
+            'saci', 'retelec', 'circontrol', 'circutor', 'soler', 'palau',
+            'gave', 'meanwell', 'mean well', '3m', 'unex', 'pemsa', 'tupersa'
+        }
+        
+        detected_brands = []
+        query_lower = query_text.lower()
+        
+        # Buscar marcas conocidas en la consulta
+        for brand in known_brands:
+            if brand in query_lower:
+                detected_brands.append(brand)
+                logger.info(f"   🏷️ Marca detectada: {brand}")
+        
+        return detected_brands
     
     def _extract_technical_terms(self, query_text: str) -> List[str]:
         """Extraer términos técnicos específicos (códigos, modelos, SKUs) y términos técnicos relevantes"""

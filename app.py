@@ -36,8 +36,10 @@ from services.knowledge_base import knowledge_service
 from services.conversation_memory import memory_service
 from config.settings import settings
 
-# FASE 3: Importar agente híbrido
-from src.agent.hybrid_agent import HybridCustomerAgent
+# FASE 3: Importar nuevo sistema multi-agente inteligente
+# from src.agent.intelligent_multi_agent import IntelligentMultiAgent
+# FASE 4: Usar el nuevo agente GPT-5
+from src.agent.eva_gpt5_agent import EvaGPT5Agent
 
 # Importar servicios de administración
 from services.admin_auth import admin_auth_service
@@ -94,8 +96,8 @@ app.include_router(admin_auth_router.router)
 app.include_router(admin_settings_router.router)
 app.include_router(admin_knowledge_router.router)
 
-# FASE 3: Instancia global del agente híbrido
-hybrid_agent: Optional[HybridCustomerAgent] = None
+# FASE 3: Instancia global del sistema multi-agente inteligente
+intelligent_agent: Optional[EvaGPT5Agent] = None
 
 # Instancia global del servicio de métricas
 metrics_service: Optional[MetricsService] = None
@@ -150,7 +152,7 @@ class ChatMessage(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """Inicializar servicios al arrancar"""
-    global hybrid_agent, metrics_service
+    global intelligent_agent, metrics_service
     logger.info("🚀 Iniciando aplicación Fase 3...")
     
     try:
@@ -174,10 +176,10 @@ async def startup_event():
         await conversation_logger.initialize()
         logger.info("✅ Logger de conversaciones inicializado")
         
-        # FASE 3: Inicializar agente híbrido
-        hybrid_agent = HybridCustomerAgent()
-        await hybrid_agent.initialize()
-        logger.info("✅ Agente híbrido IA inicializado")
+        # FASE 3: Inicializar sistema multi-agente inteligente
+        intelligent_agent = EvaGPT5Agent()
+        await intelligent_agent.initialize()
+        logger.info("✅ Sistema Multi-Agente Inteligente con GPT-5 inicializado")
         
         # Inicializar servicios de administración
         await admin_auth_service.initialize()
@@ -229,9 +231,9 @@ async def dashboard(request: Request):
         
         # FASE 3: Estadísticas del agente
         agent_stats = None
-        if hybrid_agent:
+        if intelligent_agent:
             try:
-                agent_stats = hybrid_agent.get_conversation_stats()
+                agent_stats = intelligent_agent.get_conversation_stats()
             except:
                 agent_stats = {"status": "error"}
         
@@ -735,10 +737,14 @@ async def chat_endpoint(chat_message: ChatMessage, request: Request):
             )
         
         # Procesar mensaje con el agente
-        response = await hybrid_agent.process_message(
+        # IMPORTANTE: Incluir session_id para mantener contexto
+        session_id = f"{chat_message.platform}_{chat_message.user_id}_{conversation_id or 'default'}"
+        
+        response = await intelligent_agent.process_message(
             message=chat_message.message,
             user_id=chat_message.user_id,
-            platform=chat_message.platform
+            platform=chat_message.platform,
+            session_id=session_id
         )
         
         # Registrar respuesta del bot si hay métricas
@@ -823,8 +829,8 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
             if not user_message:
                 continue
             
-            # Procesar con el agente híbrido
-            if hybrid_agent:
+            # Procesar con el sistema multi-agente inteligente
+            if intelligent_agent:
                 try:
                     # Iniciar tracking de conversación si hay servicio de métricas
                     conversation_id = None
@@ -849,10 +855,14 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
                             content=user_message
                         )
                     
-                    response = await hybrid_agent.process_message(
+                    # IMPORTANTE: Incluir session_id para mantener contexto
+                    session_id = f"{platform}_{client_id}_{conversation_id or 'default'}"
+                    
+                    response = await intelligent_agent.process_message(
                         message=user_message,
                         user_id=client_id,
-                        platform=platform
+                        platform=platform,
+                        session_id=session_id
                     )
                     
                     # Debug log para verificar formato HTML

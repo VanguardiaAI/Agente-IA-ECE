@@ -97,6 +97,8 @@ async def startup():
     """Inicializar servicios al arrancar"""
     if settings.ENABLE_CONVERSATION_LOGGING:
         await conversation_logger.initialize()
+    
+    print("✅ Servidor MCP listo - los servicios se inicializan por demanda")
 
 async def shutdown():
     """Limpiar recursos al cerrar"""

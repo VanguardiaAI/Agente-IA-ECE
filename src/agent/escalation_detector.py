@@ -30,8 +30,9 @@ class EscalationDetector:
                 "presupuesto", "descuento por volumen", "precio especial"
             ],
             "technical_support": [
-                "instalación", "conectar", "configurar", "manual técnico",
-                "esquema", "diagrama", "especificaciones técnicas"
+                "cómo instalar", "ayuda instalación", "necesito instalar", "conectar",
+                "configurar", "manual técnico", "esquema", "diagrama", 
+                "especificaciones técnicas", "no sé instalar", "problema instalación"
             ],
             "urgent": [
                 "urgente", "emergencia", "hoy mismo", "ahora mismo",

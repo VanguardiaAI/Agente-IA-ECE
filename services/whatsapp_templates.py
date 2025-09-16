@@ -43,6 +43,48 @@ class WhatsAppTemplateManager:
         }
         logger.info("WhatsApp Template Manager initialized")
     
+    async def send_cart_recovery_multimedia(self, phone_number: str, cart_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Envía mensaje de recuperación de carrito con plantilla multimedia aprobada
+        Requiere plantilla aprobada: carrito_abandono_multimedia
+        
+        Variables de la plantilla:
+        {{1}}: Nombre del cliente
+        {{2}}: Lista de productos formateada
+        {{3}}: Total del carrito
+        {{4}}: Código de descuento
+        {{5}}: URL del carrito (para botón)
+        """
+        try:
+            # Usar la nueva plantilla multimedia
+            template_name = "carrito_abandono_multimedia"
+            
+            # Preparar componentes con el nuevo formato
+            components = self._build_cart_recovery_multimedia_components(cart_data)
+            
+            # Enviar plantilla
+            result = await whatsapp_service.send_template_message(
+                to=phone_number,
+                template_name=template_name,
+                language_code="es",
+                components=components
+            )
+            
+            # Registrar envío
+            await self._log_template_sent(
+                phone_number,
+                TemplateType.CART_RECOVERY,
+                cart_data,
+                result
+            )
+            
+            return result
+        
+        except Exception as e:
+            logger.error(f"Error sending multimedia cart recovery template: {str(e)}")
+            # NO hacer fallback - propagar el error para ver qué pasa
+            raise
+    
     async def send_cart_recovery(self, phone_number: str, cart_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Envía mensaje de recuperación de carrito abandonado con plantilla carrito_recuperacion_descuento
@@ -65,7 +107,7 @@ class WhatsAppTemplateManager:
             result = await whatsapp_service.send_template_message(
                 to=phone_number,
                 template_name=template_name,
-                language_code="es_ES",  # Idioma específico es_ES
+                language_code="es",  # Cambiar a "es" que es el idioma aprobado
                 components=components
             )
             
@@ -280,8 +322,9 @@ class WhatsAppTemplateManager:
             
             product_list.append(formatted_item)
         
-        # Unir todos los productos con salto de línea simple
-        products_text = "\n".join(product_list) if product_list else "- Productos del carrito"
+        # Unir todos los productos con punto y coma o coma
+        # No podemos usar saltos de línea en los parámetros de plantilla
+        products_text = "; ".join(product_list) if product_list else "- Productos del carrito"
         body_params.append({
             "type": "text",
             "text": products_text
@@ -302,18 +345,103 @@ class WhatsAppTemplateManager:
             "parameters": body_params
         })
         
-        # Botón con URL fija del checkout
+        # NO agregar botón - la plantilla aprobada no tiene botón
+        
+        return components
+    
+    def _build_cart_recovery_multimedia_components(self, cart_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Construye componentes para la nueva plantilla multimedia
+        
+        Variables del body:
+        {{1}}: Nombre del cliente
+        {{2}}: Lista de productos formateada  
+        {{3}}: Total del carrito
+        {{4}}: Código de descuento
+        
+        Nota: El botón tiene URL estática, no dinámica
+        """
+        components = []
+        
+        # Header con imagen - REQUERIDO para plantilla multimedia
+        # Usar la imagen exacta de El Corte Eléctrico
         components.append({
-            "type": "button",
-            "sub_type": "url",
-            "index": "0",
+            "type": "header",
             "parameters": [
                 {
-                    "type": "text",
-                    "text": "https://elcorteelectrico.com/checkout"
+                    "type": "image",
+                    "image": {
+                        "link": cart_data.get("header_image_url", "https://i.imgur.com/HP7WXrY.png")
+                    }
                 }
             ]
         })
+        
+        # Body con 4 parámetros
+        body_params = []
+        
+        # Variable {{1}}: Nombre del cliente
+        customer_name = cart_data.get("customer_name", "Cliente")
+        # Obtener solo el primer nombre
+        first_name = customer_name.split()[0] if customer_name else "Cliente"
+        body_params.append({
+            "type": "text",
+            "text": first_name
+        })
+        
+        # Variable {{2}}: Lista de productos formateada
+        items = cart_data.get("items", [])
+        product_lines = []
+        
+        for item in items[:5]:  # Máximo 5 productos
+            name = item.get('name', 'Producto')
+            sku = item.get('sku', '')
+            quantity = item.get('quantity', 1)
+            
+            # Formato como en la imagen: "- Nombre SKU"
+            if sku:
+                line = f"- {name} {sku}"
+            else:
+                line = f"- {name}"
+            
+            if quantity > 1:
+                line += f" x{quantity}"
+            
+            product_lines.append(line)
+        
+        # NO podemos usar saltos de línea en parámetros de plantilla
+        # Usar punto y coma o coma para separar
+        products_text = "; ".join(product_lines) if product_lines else "- Tus productos seleccionados"
+        body_params.append({
+            "type": "text",
+            "text": products_text
+        })
+        
+        # Variable {{3}}: Total formateado
+        cart_total = cart_data.get("total", 0)
+        if isinstance(cart_total, str):
+            total_formatted = cart_total
+        else:
+            total_formatted = f"{cart_total:.2f}".replace('.', ',') + " €"
+        body_params.append({
+            "type": "text",
+            "text": total_formatted
+        })
+        
+        # Variable {{4}}: Código de descuento
+        discount_code = cart_data.get("discount_code", "DESCUENTOEXPRESS")
+        body_params.append({
+            "type": "text",
+            "text": discount_code
+        })
+        
+        # Añadir componente del cuerpo
+        components.append({
+            "type": "body",
+            "parameters": body_params
+        })
+        
+        # NO incluir botón - La plantilla tiene URL estática configurada en Meta
         
         return components
     

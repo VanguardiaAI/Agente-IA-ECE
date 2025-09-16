@@ -132,4 +132,26 @@ dmypy.json
 
 # === TEST RESULTS ===
 *test_report*.json
-test_results*.json 
+test_results*.json
+test_results/
+
+# === TESTS ===
+tests/
+scripts/test_*.py
+
+# === DEVELOPMENT FILES ===
+*.todo
+*.draft
+PENDING_*.md
+*_REPORT.md
+*_SUMMARY.md
+*_REFINEMENT.md
+*_REDESIGN.md
+
+# === TEMPORARY DIRECTORIES ===
+.playwright-mcp/
+chatbot-widget-manaslu/
+eva-chatbot-widget-manaslu-mockup/
+
+# === ZIP FILES ===
+*.zip

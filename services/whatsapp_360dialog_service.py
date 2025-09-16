@@ -125,6 +125,11 @@ class WhatsApp360DialogService:
                 "message_id": message.reply_to
             }
         
+        # DEBUG: Imprimir payload completo para templates
+        if message.type == MessageType.TEMPLATE:
+            logger.info(f"DEBUG - Sending template: {payload.get('template', {}).get('name', 'unknown')}")
+            logger.info(f"DEBUG - Full payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
+        
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(endpoint, headers=self.headers, json=payload) as response:
@@ -135,10 +140,13 @@ class WhatsApp360DialogService:
                         return result
                     else:
                         logger.error(f"Failed to send message: {result}")
+                        logger.error(f"DEBUG - Payload that failed: {json.dumps(payload, indent=2, ensure_ascii=False)}")
                         raise Exception(f"WhatsApp API error: {result.get('error', {}).get('message', 'Unknown error')}")
         
         except Exception as e:
             logger.error(f"Error sending WhatsApp message: {str(e)}")
+            if message.type == MessageType.TEMPLATE:
+                logger.error(f"DEBUG - Template name was: {payload.get('template', {}).get('name', 'unknown')}")
             raise
     
     async def send_text_message(self, to: str, text: str, reply_to: Optional[str] = None) -> Dict[str, Any]:

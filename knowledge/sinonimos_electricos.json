@@ -1,0 +1,158 @@
+{
+  "protecciones_electricas": {
+    "automatico": {
+      "sinonimos": ["magnetotérmico", "PIA", "disyuntor", "interruptor automático", "llave térmica", "breaker"],
+      "regiones": {
+        "españa": ["automático", "magnetotérmico", "PIA"],
+        "latinoamerica": ["breaker", "térmico", "llave térmica"],
+        "argentina": ["disyuntor", "térmica", "llave térmica"]
+      },
+      "especificaciones_comunes": ["amperaje", "curva", "polos", "poder de corte"]
+    },
+    "diferencial": {
+      "sinonimos": ["interruptor diferencial", "ID", "RCD", "protección diferencial", "llave diferencial", "disyuntor diferencial"],
+      "tipos": ["normal", "superinmunizado", "rearmable", "selectivo"],
+      "tipos_tecnicos": {
+        "superinmunizado": ["HPI", "FSI", "SI", "B-SI", "A-SI", "alta inmunidad"],
+        "selectivo": ["tipo S", "retardado", "selectivo"]
+      },
+      "especificaciones_comunes": ["sensibilidad", "mA", "polos", "clase"]
+    },
+    "fusibles": {
+      "sinonimos": ["plomos", "cortacircuitos", "cartuchos fusibles"],
+      "tipos": ["cilíndricos", "cuchilla", "NH", "diazed", "neozed"]
+    }
+  },
+  
+  "cables_conexiones": {
+    "cable": {
+      "sinonimos": ["hilo", "manguera", "conductor", "cable eléctrico", "alambre"],
+      "tipos": ["unipolar", "multipolar", "manguera", "paralelo"],
+      "especificaciones_comunes": ["sección", "mm2", "mm²", "AWG", "color", "metros"]
+    },
+    "clema": {
+      "sinonimos": ["regleta", "borna", "conector cable", "regleta borne", "terminal", "borne de conexión"],
+      "tipos": ["tornillo", "automática", "carril DIN"]
+    },
+    "bridas": {
+      "sinonimos": ["fleje", "cintillo", "chincho", "abrazadera", "precinto", "cintillos", "amarras", "sujetacables"],
+      "regiones": {
+        "españa": ["bridas", "abrazadera"],
+        "mexico": ["cinchos", "amarras"],
+        "argentina": ["precintos", "sujetacables"]
+      }
+    },
+    "regleta": {
+      "sinonimos": ["ladrón", "prolongador", "base múltiple", "zapatilla", "multitoma", "alargador"],
+      "tipos": ["con interruptor", "sin interruptor", "con protección"]
+    },
+    "enrollacables": {
+      "sinonimos": ["recoge cables", "organizador cables", "portacables", "recogecables", "bobina cable", "carrete cable", "alargador enrollable"],
+      "especificaciones_comunes": ["metros", "sección cable", "con térmico"]
+    }
+  },
+  
+  "iluminacion": {
+    "lampara": {
+      "sinonimos": ["bombilla", "foco", "luz", "bombillo", "luminaria", "ampolleta"],
+      "regiones": {
+        "españa": ["bombilla", "lámpara"],
+        "mexico": ["foco"],
+        "argentina": ["lamparita", "lámpara"],
+        "chile": ["ampolleta"]
+      }
+    },
+    "portalamparas": {
+      "sinonimos": ["casquillo", "socket", "zócalo", "porta bombilla"],
+      "tipos": ["E27", "E14", "GU10", "G9", "bayoneta"]
+    },
+    "lampara_industrial": {
+      "sinonimos": ["campana industrial", "luminaria industrial", "proyector", "alto bay", "lámpara para fábrica", "lámpara para nave", "reflector industrial"],
+      "tipos": ["LED", "vapor sodio", "halogenuros metálicos"]
+    }
+  },
+  
+  "calefaccion_agua": {
+    "termo": {
+      "sinonimos": ["calentador de agua", "termo eléctrico", "boiler", "termotanque", "acumulador"],
+      "regiones": {
+        "españa": ["termo", "termo eléctrico"],
+        "mexico": ["boiler", "calentador"],
+        "argentina": ["termotanque"]
+      }
+    },
+    "calefactor": {
+      "sinonimos": ["radiador eléctrico", "estufa", "calentador de baño", "calefacción", "convector"],
+      "tipos": ["convección", "radiante", "cerámico", "aceite", "bajo consumo"]
+    },
+    "emisores_termicos": {
+      "sinonimos": ["radiador eléctrico", "radiador de inercia térmica", "emisor térmico", "radiador bajo consumo"],
+      "tipos": ["seco", "fluido", "cerámico"]
+    },
+    "toallero": {
+      "sinonimos": ["secatoallas", "radiador toallero", "toallero eléctrico", "calentador toallas"]
+    }
+  },
+  
+  "comunicacion": {
+    "portero": {
+      "sinonimos": ["telefonillo", "auricular", "intercomunicador", "interfono", "citófono"],
+      "tipos": ["audio", "manos libres"]
+    },
+    "videoportero": {
+      "sinonimos": ["telefonillo con cámara", "visor de puerta", "video portero", "intercomunicador video", "monitor puerta"],
+      "tipos": ["color", "wifi", "IP"]
+    }
+  },
+  
+  "industrial": {
+    "cetac": {
+      "sinonimos": ["conector industrial", "enchufe industrial", "base industrial", "toma industrial", "conector CEE"],
+      "especificaciones": ["16A", "32A", "63A", "125A", "3P+N", "3P+N+T"]
+    },
+    "control_nivel": {
+      "sinonimos": ["boya", "flotador", "interruptor nivel", "sensor nivel", "control cisterna"]
+    },
+    "transformador": {
+      "sinonimos": ["trafo", "transformador eléctrico", "autotransformador"],
+      "tipos": ["monofásico", "trifásico", "toroidal", "seguridad"]
+    },
+    "estabilizador": {
+      "sinonimos": ["regulador de voltaje", "controlador de voltaje", "afianzador", "estabilizador tensión", "AVR"],
+      "tipos": ["monofásico", "trifásico", "servo"]
+    }
+  },
+  
+  "configuraciones": {
+    "polos": {
+      "unipolar": ["1P", "monopolar", "1 polo"],
+      "bipolar": ["2P", "1P+N", "2 polos"],
+      "tripolar": ["3P", "3 polos"],
+      "tetrapolar": ["4P", "3P+N", "4 polos", "tetra"]
+    },
+    "unidades": {
+      "miliamperios": ["mA", "miliamperios", "miliamperes"],
+      "amperios": ["A", "amperios", "amperes", "amp"],
+      "milimetros": ["mm", "mm2", "mm²", "milímetros cuadrados"]
+    }
+  },
+  
+  "caracteristicas": {
+    "proteccion": {
+      "estanco": ["hermético", "impermeable", "IP65", "IP66", "IP67", "exterior"],
+      "estanqueidad": ["IP", "grado de protección", "protección IP"]
+    },
+    "instalacion": {
+      "empotrar": ["empotrable", "embutir", "de empotrar"],
+      "superficie": ["sobreponer", "de superficie", "exterior"]
+    }
+  },
+  
+  "marcas_equivalencias": {
+    "principales": ["Schneider", "Legrand", "Simon", "ABB", "Siemens", "Hager", "Gewiss", "Merlin Gerin", "Circutor", "Chint", "LS", "BTicino"],
+    "equivalencias": {
+      "Merlin Gerin": "Schneider Electric",
+      "BTicino": "Legrand"
+    }
+  }
+}

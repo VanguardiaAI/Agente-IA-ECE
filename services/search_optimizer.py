@@ -6,7 +6,7 @@ Analiza la consulta del usuario y genera los mejores términos de búsqueda
 import os
 from typing import List, Dict, Any, Tuple
 import logging
-from openai import AsyncOpenAI
+from services.gpt5_client import GPT5Client, ReasoningEffort, Verbosity
 import aiohttp
 import json
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class SearchOptimizer:
     def __init__(self):
-        self.client = AsyncOpenAI()
+        self.gpt5 = GPT5Client()
         self.model = "gpt-5-mini"  # Modelo económico para análisis rápido
         
     async def analyze_product_query(self, user_query: str) -> Dict[str, Any]:
@@ -27,105 +27,124 @@ class SearchOptimizer:
         """
         
         prompt = f"""
-Un cliente dice: "{user_query}"
+Un cliente de una tienda eléctrica dice: "{user_query}"
 
-ANALIZA qué producto busca y devuelve los términos EXACTOS para encontrarlo.
+ANALIZA qué producto busca y genera términos de búsqueda optimizados.
 
-IMPORTANTE:
-- Si dice "termo eléctrico": busca productos que contengan "termo" en el título
-- NO traduzcas "termo" a "calentador" si el usuario dijo "termo"
-- CORRIGE typos: "temro" → "termo", "electrico" → "eléctrico"
+IMPORTANTE - Equivalencias y sinónimos del sector eléctrico (proporcionados por el cliente):
 
-Devuelve JSON:
+PROTECCIONES ELÉCTRICAS:
+- "automático/automáticos" → "magnetotérmico", "PIA", "disyuntor", "interruptor automático"
+- "diferencial" → "llave diferencial", "protección de personas", "interruptor diferencial"
+- "fusibles" → "plomos", "cortacircuitos"
+- "superinmunizado" → "diferencial HPI", "diferencial FSI", "diferencial SI", "diferencial B-SI", "diferencial A-SI"
+
+CABLES Y CONEXIONES:
+- "cable" → "hilo", "manguera", "conductor", "cable eléctrico"
+- "clema" → "regleta", "borna", "conector cable", "regleta borne"
+- "bridas" → "fleje", "cintillo", "chincho", "abrazadera", "precinto", "cintillos"
+- "regleta" → "ladrón", "prolongador", "base múltiple"
+- "recoge cables" → "enrollacables", "organizador cables", "portacables", "recogecables"
+- "enrollacables" → "recoge cables", "bobina cable", "carrete cable"
+
+ILUMINACIÓN:
+- "lámpara" → "bombilla", "foco", "luz", "bombillo", "luminaria"
+- "portalámparas" → "casquillo", "socket"
+- "lámpara para fábrica/industrial/nave" → "campana industrial", "luminaria industrial", "proyector", "alto bay"
+
+CALEFACCIÓN Y AGUA:
+- "termo/termos" → "calentador de agua", "termo eléctrico"
+- "caldera/calderas" → "calentador"
+- "calefactor" → "radiador eléctrico", "estufa", "calentador de baño"
+- "emisores térmicos" → "radiador eléctrico", "radiador de inercia térmica"
+- "convector" → "radiador de aire", "radiador por convección"
+- "termoventilador" → "estufa con ventilador", "calentador con ventilador"
+- "toallero/toalleros" → "secatoallas", "radiador toallero"
+
+COMUNICACIÓN:
+- "portero" → "telefonillo", "auricular", "intercomunicador"
+- "videoportero" → "telefonillo con cámara", "visor de puerta"
+
+INDUSTRIAL:
+- "cetac" → "conector industrial", "enchufe industrial", "base industrial"
+- "control de nivel" → "boya", "flotador"
+- "transformador" → "trafo"
+- "estabilizador" → "regulador de voltaje", "controlador de voltaje", "afianzador"
+- "estanco" → "hermético", "impermeable"
+- "estanqueidad" → "IP", "grado de protección"
+- "arco eléctrico" → "apaga chispas", "ARC"
+
+CONFIGURACIONES:
+- "unipolar" → "1P"
+- "bipolar" → "2P", "1+N"
+- "tripolar" → "3P"
+- "tetrapolar" → "4P", "3+N"
+- "miliamperios" → "mA"
+
+Devuelve JSON con términos de búsqueda ampliados:
 {{
-    "search_terms": ["termo", "eléctrico"],
-    "product_type": "termo eléctrico",
-    "search_query": "termo eléctrico"
+    "search_terms": ["término principal", "sinónimos relevantes"],
+    "product_type": "tipo de producto",
+    "search_query": "consulta optimizada para búsqueda"
 }}
 
+Ejemplos:
+- Usuario: "necesito un automático de 16A"
+- Respuesta: {{"search_terms": ["automático", "magnetotérmico", "PIA", "disyuntor", "16A"], "product_type": "protección eléctrica", "search_query": "magnetotérmico PIA 16A automático"}}
+
+- Usuario: "lámpara para fábrica"
+- Respuesta: {{"search_terms": ["lámpara", "campana industrial", "luminaria industrial", "proyector", "alto bay"], "product_type": "iluminación industrial", "search_query": "campana industrial luminaria proyector alto bay"}}
+
+- Usuario: "necesito cintillos"
+- Respuesta: {{"search_terms": ["cintillos", "bridas", "fleje", "abrazadera", "precinto"], "product_type": "sujeción cables", "search_query": "bridas cintillos abrazadera fleje"}}
+
 REGLAS:
-- USA las palabras EXACTAS del usuario (corrigiendo solo typos)
+- EXPANDE la búsqueda con sinónimos técnicos del sector
+- INCLUYE términos alternativos que se usan para el mismo producto
+- CORRIGE typos evidentes
 - NO incluir saludos ni verbos (hola/quiero/busco)
-- Si dice "termo", busca "termo" NO "calentador"
-- Si dice "calentador", busca "calentador"
 """
 
         try:
-            # Usar la Responses API para GPT-5
-            headers = {
-                "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
-                "Content-Type": "application/json"
-            }
+            # Usar GPT5Client con Responses API
+            response = await self.gpt5.create_response(
+                input_text=prompt,
+                model=self.model,
+                reasoning_effort=ReasoningEffort.MINIMAL,
+                verbosity=Verbosity.LOW
+            )
             
-            data = {
-                "model": self.model,
-                "input": prompt,
-                "reasoning": {
-                    "effort": "minimal"  # Usar mínimo esfuerzo para respuestas rápidas
-                },
-                "text": {
-                    "verbosity": "low"  # Respuestas concisas
+            content = response.content
+            logger.info(f"📝 Respuesta de IA: '{content[:200]}...' (truncada)" if len(content) > 200 else f"📝 Respuesta de IA: '{content}'")
+            
+            if not content:
+                logger.warning("Respuesta vacía, usando fallback")
+                raise ValueError("Empty response")
+            
+            try:
+                # Intentar parsear como JSON
+                parsed = json.loads(content)
+                
+                # Asegurar que tiene la estructura esperada
+                return {
+                    "search_terms": parsed.get("search_terms", user_query.lower().split()),
+                    "product_type": parsed.get("product_type", "producto"),
+                    "specific_features": parsed.get("specific_features", []),
+                    "search_query": parsed.get("search_query", user_query),
+                    "intent": parsed.get("intent", f"buscar {parsed.get('product_type', 'producto')}")
                 }
-            }
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.openai.com/v1/responses",
-                    headers=headers,
-                    json=data
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"Error en API: {response.status} - {error_text}")
-                        raise ValueError(f"API error: {response.status}")
-                    
-                    result = await response.json()
-                    logger.info(f"🔍 Response object: {result}")
-                    
-                    # Extraer el contenido de la respuesta GPT-5
-                    content = ''
-                    output = result.get('output', [])
-                    if output and len(output) > 1:
-                        message = output[1]  # El mensaje es el segundo elemento
-                        if message.get('type') == 'message' and message.get('content'):
-                            content_array = message.get('content', [])
-                            if content_array and isinstance(content_array, list):
-                                # Extraer el texto del primer elemento de contenido
-                                for content_item in content_array:
-                                    if content_item.get('type') == 'output_text':
-                                        content = content_item.get('text', '')
-                                        break
-                    
-                    logger.info(f"📝 Respuesta de IA: '{content[:200]}...' (truncada)" if len(content) > 200 else f"📝 Respuesta de IA: '{content}'")
-                    
-                    if not content:
-                        logger.warning("Respuesta vacía, usando fallback")
-                        raise ValueError("Empty response")
-                    
-                    try:
-                        # Intentar parsear como JSON
-                        parsed = json.loads(content)
-                        
-                        # Asegurar que tiene la estructura esperada
-                        return {
-                            "search_terms": parsed.get("search_terms", user_query.lower().split()),
-                            "product_type": parsed.get("product_type", "producto"),
-                            "specific_features": parsed.get("specific_features", []),
-                            "search_query": parsed.get("search_query", user_query),
-                            "intent": parsed.get("intent", f"buscar {parsed.get('product_type', 'producto')}")
-                        }
-                    except json.JSONDecodeError:
-                        # Si no es JSON, tratar como texto plano
-                        logger.info("Respuesta no es JSON, procesando como texto")
-                        terms = [term.strip() for term in content.split(',') if term.strip()]
-                        
-                        return {
-                            "search_terms": terms if terms else user_query.lower().split(),
-                            "product_type": "producto",
-                            "specific_features": [],
-                            "search_query": ' '.join(terms) if terms else user_query,
-                            "intent": "buscar producto"
-                        }
+            except json.JSONDecodeError:
+                # Si no es JSON, tratar como texto plano
+                logger.info("Respuesta no es JSON, procesando como texto")
+                terms = [term.strip() for term in content.split(',') if term.strip()]
+                
+                return {
+                    "search_terms": terms if terms else user_query.lower().split(),
+                    "product_type": "producto",
+                    "specific_features": [],
+                    "search_query": ' '.join(terms) if terms else user_query,
+                    "intent": "buscar producto"
+                }
             
         except Exception as e:
             logger.error(f"Error en análisis de búsqueda: {e}")
@@ -166,53 +185,19 @@ Responde con JSON: {{"product_ids": ["id1", "id2", "id3"]}}
 """
 
         try:
-            # Usar la Responses API para GPT-5
-            headers = {
-                "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
-                "Content-Type": "application/json"
-            }
+            # Usar GPT5Client con Responses API
+            response = await self.gpt5.create_response(
+                input_text=prompt,
+                model=self.model,
+                reasoning_effort=ReasoningEffort.MINIMAL,
+                verbosity=Verbosity.LOW
+            )
             
-            data = {
-                "model": self.model,
-                "input": prompt,
-                "reasoning": {
-                    "effort": "minimal"
-                },
-                "text": {
-                    "verbosity": "low"
-                }
-            }
+            content = response.content
+            logger.info(f"📝 Respuesta optimización: {content[:200]}...' (truncada)" if len(content) > 200 else f"📝 Respuesta optimización: {content}")
             
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.openai.com/v1/responses",
-                    headers=headers,
-                    json=data
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"Error en API: {response.status} - {error_text}")
-                        return products[:limit]
-                    
-                    result = await response.json()
-                    
-                    # Extraer el contenido de la respuesta GPT-5
-                    content = ''
-                    output = result.get('output', [])
-                    if output and len(output) > 1:
-                        message = output[1]
-                        if message.get('type') == 'message' and message.get('content'):
-                            content_array = message.get('content', [])
-                            if content_array and isinstance(content_array, list):
-                                for content_item in content_array:
-                                    if content_item.get('type') == 'output_text':
-                                        content = content_item.get('text', '')
-                                        break
-                    
-                    logger.info(f"📝 Respuesta optimización: {content[:200]}...' (truncada)" if len(content) > 200 else f"📝 Respuesta optimización: {content}")
-                    
-                    if not content:
-                        return products[:limit]
+            if not content:
+                return products[:limit]
                     
                     try:
                         parsed = json.loads(content)
