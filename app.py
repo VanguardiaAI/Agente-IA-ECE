@@ -1190,7 +1190,7 @@ async def _process_cart_abandoned(webhook_data: Dict[str, Any]):
         # Extraer datos del webhook
         # El formato puede variar según el plugin, vamos a loggear primero
         email = webhook_data.get('email') or webhook_data.get('customer_email')
-        phone = webhook_data.get('billing_phone') or webhook_data.get('customer_phone') or webhook_data.get('phone')
+        phone = webhook_data.get('phone_number') or webhook_data.get('billing_phone') or webhook_data.get('customer_phone') or webhook_data.get('phone')
         cart_total = webhook_data.get('cart_total') or webhook_data.get('total')
         cart_contents = webhook_data.get('cart_contents') or webhook_data.get('cart_items') or webhook_data.get('items')
         customer_name = webhook_data.get('customer_name') or webhook_data.get('billing_first_name', '')
@@ -1207,13 +1207,56 @@ async def _process_cart_abandoned(webhook_data: Dict[str, Any]):
             logger.warning("No se encontró número de teléfono en el webhook")
             return
         
-        # Formatear teléfono español
-        phone = ''.join(filter(str.isdigit, str(phone)))
-        if len(phone) == 9 and phone[0] in '679':
-            phone = f'+34{phone}'
-        elif not phone.startswith('+34'):
-            logger.warning(f"Teléfono no válido para España: {phone}")
+        # Formatear teléfono español - soportar múltiples formatos
+        logger.info(f"📱 Número original recibido: '{phone}'")
+        
+        # Limpiar el número: quitar espacios, guiones, paréntesis, puntos
+        phone_clean = str(phone).strip()
+        phone_clean = phone_clean.replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('.', '')
+        
+        # Si empieza con + seguido de números, es válido
+        if phone_clean.startswith('+'):
+            # Verificar que sea español
+            if phone_clean.startswith('+34'):
+                phone = phone_clean
+            else:
+                logger.warning(f"Número no español (se esperaba +34): {phone_clean}")
+                return
+        else:
+            # Quitar cualquier otro carácter no numérico
+            phone_digits = ''.join(filter(str.isdigit, phone_clean))
+            
+            # Casos posibles:
+            # 1. 9 dígitos: número español sin código (6XX XXX XXX o 9XX XXX XXX)
+            # 2. 11 dígitos empezando con 34: número español con código (34 6XX XXX XXX)
+            # 3. 12 dígitos empezando con 0034: número español con prefijo internacional
+            
+            if len(phone_digits) == 9:
+                # Número español sin código de país
+                if phone_digits[0] in '679':
+                    phone = f'+34{phone_digits}'
+                else:
+                    logger.warning(f"Número español debe empezar con 6, 7 o 9: {phone_digits}")
+                    return
+                    
+            elif len(phone_digits) == 11 and phone_digits.startswith('34'):
+                # Número con código de país sin +
+                phone = f'+{phone_digits}'
+                
+            elif len(phone_digits) >= 12 and phone_digits.startswith('0034'):
+                # Número con prefijo internacional 0034
+                phone = f'+{phone_digits[2:]}'  # Quitar 00 y agregar +
+                
+            else:
+                logger.warning(f"Formato de teléfono no reconocido: {phone_clean} (dígitos: {phone_digits})")
+                return
+        
+        # Validación final: debe ser +34 seguido de 9 dígitos
+        if not (phone.startswith('+34') and len(phone) == 12):
+            logger.warning(f"Número formateado no válido: {phone}")
             return
+            
+        logger.info(f"✅ Número formateado correctamente: {phone}")
         
         # Usar código de descuento fijo EXPRESS (ya existe en WooCommerce)
         discount_code = "DESCUENTOEXPRESS"
