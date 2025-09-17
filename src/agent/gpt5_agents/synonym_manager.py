@@ -22,7 +22,8 @@ class SynonymManager:
     def load_synonyms(self, file_path: Optional[str] = None) -> bool:
         """Carga el archivo de sinónimos"""
         if file_path is None:
-            file_path = "/Users/vanguardia/Desktop/Proyectos/MCP-WC/knowledge/sinonimos_electricos.json"
+            # Use relative path from the project root
+            file_path = "knowledge/sinonimos_electricos.json"
             
         try:
             path = Path(file_path)

@@ -570,6 +570,7 @@ debo consultar la base de conocimiento para darte información precisa y actuali
                 )
             
             # PASO 4: Manejar búsquedas muy generales
+            # Si ya clarificamos una vez, mostrar resultados aunque sean generales
             if validation.result_quality == "too_general" and not search_context.has_clarified:
                 # Es una búsqueda muy general - pedir clarificación específica
                 conversation.update_search_state(SearchState.NEEDS_INFO)

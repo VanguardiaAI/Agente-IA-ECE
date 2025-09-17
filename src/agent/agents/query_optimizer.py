@@ -39,7 +39,8 @@ class QueryOptimizerAgent:
     def _load_synonyms(self) -> Dict:
         """Carga el diccionario de sinónimos"""
         try:
-            with open('/Users/vanguardia/Desktop/Proyectos/MCP-WC/knowledge/sinonimos_electricos.json', 'r', encoding='utf-8') as f:
+            # Use relative path from the project root
+            with open('knowledge/sinonimos_electricos.json', 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
             self.logger.error(f"Error cargando sinónimos: {e}")
