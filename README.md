@@ -1,4 +1,4 @@
-# 🤖 Agente de Atención al Cliente con WooCommerce y MCP
+# 🤖 Agente de Atención al Cliente con WooCommerce y MCP Hehco por Vanguardia.dev
 
 Un agente de inteligencia artificial avanzado para atención al cliente que se integra con WooCommerce utilizando el protocolo MCP (Model Context Protocol).
 
@@ -25,7 +25,7 @@ Un agente de inteligencia artificial avanzado para atención al cliente que se i
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/tu-usuario/mcp-wc-agent.git
+git clone https://github.com/VanguardiaAI/mcp-wc-agent.git
 cd mcp-wc-agent
 ```
 
@@ -229,13 +229,6 @@ Los siguientes archivos NO se incluyen en el repositorio:
 - `docker/postgres/data/` (datos de base de datos)
 - `venv/` (entorno virtual)
 
-### Mejores Prácticas
-
-1. **Nunca** subir credenciales al repositorio
-2. Usar variables de entorno para configuraciones sensibles
-3. Rotar regularmente las API keys
-4. Monitorear logs de acceso
-
 ## 🤝 Contribución
 
 1. Fork el proyecto
@@ -253,7 +246,7 @@ Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más det
 Si tienes problemas o preguntas:
 
 1. Revisa la [documentación](docs/)
-2. Busca en los [issues existentes](https://github.com/tu-usuario/mcp-wc-agent/issues)
+2. Busca en los [issues existentes](https://github.com/VanguardiaAI/mcp-wc-agent/issues)
 3. Crea un nuevo issue con detalles del problema
 
 ## 🔄 Roadmap
@@ -267,10 +260,6 @@ Si tienes problemas o preguntas:
 
 ## 📞 Contacto
 
-- **Desarrollador**: Tu Nombre
-- **Email**: tu-email@ejemplo.com
-- **Proyecto**: [https://github.com/tu-usuario/mcp-wc-agent](https://github.com/tu-usuario/mcp-wc-agent)
-
----
-
-⭐ Si este proyecto te ayuda, ¡déjanos una estrella!
+- **Desarrollador**: Pablo Luque
+- **Email**: pablo@ecomframe.com
+- **Proyecto**: [https://github.com/vanguardiaai/mcp-wc-agent](https://github.com/VanguardiaAI/mcp-wc-agent)

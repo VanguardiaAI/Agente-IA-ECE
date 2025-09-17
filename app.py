@@ -697,7 +697,7 @@ async def get_knowledge_item(external_id: str):
 async def chat_endpoint(chat_message: ChatMessage, request: Request):
     """Endpoint REST para chat con el agente IA"""
     try:
-        if not hybrid_agent:
+        if not intelligent_agent:
             raise HTTPException(status_code=503, detail="Agente no inicializado")
         
         # Detectar plataforma si no se especifica
@@ -925,10 +925,10 @@ async def websocket_chat(websocket: WebSocket, client_id: str):
 async def get_chat_stats():
     """Obtener estadísticas del agente de chat"""
     try:
-        if not hybrid_agent:
+        if not intelligent_agent:
             raise HTTPException(status_code=503, detail="Agente no inicializado")
         
-        stats = hybrid_agent.get_conversation_stats()
+        stats = intelligent_agent.get_conversation_stats()
         
         # Agregar métricas si están disponibles
         metrics_data = {}
@@ -951,12 +951,12 @@ async def get_chat_stats():
 async def reset_user_conversation(user_id: str):
     """Reiniciar conversación de un usuario específico"""
     try:
-        if not hybrid_agent:
+        if not intelligent_agent:
             raise HTTPException(status_code=503, detail="Agente no inicializado")
         
         # Por ahora reseteamos toda la conversación 
         # En el futuro se puede hacer por usuario específico
-        hybrid_agent.reset_conversation()
+        intelligent_agent.reset_conversation()
         
         return {
             "message": f"Conversación reiniciada para usuario {user_id}",
@@ -1386,7 +1386,7 @@ async def _process_whatsapp_webhook(webhook_data: Dict[str, Any]):
 async def _process_whatsapp_message(message_data: Dict[str, Any], value_data: Dict[str, Any]):
     """Procesar mensaje individual de WhatsApp con el agente"""
     try:
-        if not hybrid_agent:
+        if not intelligent_agent:
             logger.error("Agente no inicializado para procesar mensaje de WhatsApp")
             return
         
@@ -1421,7 +1421,7 @@ async def _process_whatsapp_message(message_data: Dict[str, Any], value_data: Di
                 )
             
             # Procesar con el agente
-            response = await hybrid_agent.process_message(
+            response = await intelligent_agent.process_message(
                 message=text_content,
                 user_id=from_number,
                 platform="whatsapp"

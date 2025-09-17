@@ -104,8 +104,3 @@ docker-compose -f docker-compose.production.yml build
 docker-compose -f docker-compose.production.yml up -d
 ```
 
-## 📞 Soporte
-
-Para problemas técnicos relacionados con Eva AI:
-- Repositorio: https://github.com/VanguardiaAI/Agente-IA-ECE
-- Documentación: `/opt/eva/Agente-IA-ECE/docs/`
