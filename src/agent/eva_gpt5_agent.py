@@ -428,9 +428,11 @@ debo consultar la base de conocimiento para darte información precisa y actuali
             # Generar queries
             if len(search_context.search_attempts) == 0:
                 # Primera búsqueda
-                self.logger.info(f"🔎 Generando queries para: '{message}'")
+                # Usar la query combinada si es una respuesta a clarificación
+                query_to_use = search_context.original_query if search_context.has_clarified else message
+                self.logger.info(f"🔎 Generando queries para: '{query_to_use}'")
                 queries = await self.query_generator.generate_queries(
-                    message,
+                    query_to_use,
                     search_context.extracted_info,
                     analysis.product_type
                 )
