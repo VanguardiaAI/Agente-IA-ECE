@@ -93,6 +93,11 @@ IMPORTANTE:
 - "Diferencial" = interruptor diferencial/ID
 - Detecta la intención real basándote en el contexto de material eléctrico
 
+CRÍTICO - SI EL ASISTENTE PIDIÓ CLARIFICACIÓN:
+- Si el último mensaje del asistente pregunta por detalles específicos, el mensaje actual ES la respuesta
+- SIEMPRE marca has_enough_info = true cuando el usuario está respondiendo a una clarificación
+- Combina la información: query anterior + respuesta actual
+
 ANALIZA la consulta y determina:
 
 1. ¿Qué tipo de producto busca? (sé específico, corrigiendo errores ortográficos si los hay)

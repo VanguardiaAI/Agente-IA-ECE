@@ -43,6 +43,8 @@ class SearchContext:
     refinement_feedback: List[str] = field(default_factory=list)
     synonyms_used: List[str] = field(default_factory=list)
     has_clarified: bool = False  # Track if we already asked for clarification
+    clarification_count: int = 0  # Count how many times we've asked for clarification
+    needs_clarification_for_general: bool = False  # Track if we asked due to general search
     
     def add_attempt(self, query: str, results: List[Dict], valid: bool, feedback: str = ""):
         """Registra un intento de búsqueda"""
@@ -121,9 +123,13 @@ class ConversationState:
             # Primera búsqueda - crear nuevo contexto
             self.search_context = SearchContext(original_query=query)
         else:
-            # Ya existe contexto - actualizarlo manteniendo el estado
-            self.search_context.current_query = query
-            # Mantener has_clarified y otra información importante
+            # Ya existe contexto - decidir si es nueva búsqueda o continuación
+            if self.search_state == SearchState.NEEDS_INFO:
+                # Estamos esperando clarificación - mantener contexto
+                self.search_context.current_query = query
+            else:
+                # Nueva búsqueda - crear nuevo contexto
+                self.search_context = SearchContext(original_query=query)
         return self.search_context
         
     def summary(self) -> Dict[str, Any]:

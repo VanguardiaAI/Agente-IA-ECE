@@ -60,6 +60,12 @@ class IntentClassifier:
 CONTEXTO: Vendemos productos eléctricos para instalaciones (automáticos, diferenciales, cables, lámparas, etc.).
 Cuando alguien dice "quiero un automático" se refiere a un interruptor magnetotérmico, NO a un coche automático.
 
+ABREVIACIONES COMUNES DE PRODUCTOS:
+- "ID" = Interruptor Diferencial → PRODUCT_SEARCH
+- "PIA" = Pequeño Interruptor Automático → PRODUCT_SEARCH
+- "IAR" = Interruptor Automático de Reenganche → PRODUCT_SEARCH
+- Si el usuario dice "quiero un [abreviación]" es SIEMPRE una búsqueda de producto
+
 ANALIZA el siguiente mensaje y determina la intención del usuario.{context_str}
 
 Mensaje actual: "{message}"

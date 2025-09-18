@@ -350,15 +350,21 @@ debo consultar la base de conocimiento para darte información precisa y actuali
             self.logger.info("📝 Procesando respuesta a clarificación")
             
             # Combinar la información anterior con la nueva
-            previous_query = conversation.search_context.original_query
+            search_context = conversation.search_context
+            previous_query = search_context.original_query
             combined_query = f"{previous_query} {message}"
             
             # Actualizar el contexto con la información combinada
-            search_context = conversation.search_context
             search_context.original_query = combined_query
-            search_context.has_clarified = True  # Ya clarificamos, no volver a preguntar
+            search_context.has_clarified = True
+            search_context.clarification_count += 1
             
-            # IMPORTANTE: Resetear intentos de búsqueda para permitir nueva búsqueda
+            # IMPORTANTE: Después de 1 clarificación, mostrar resultados siempre
+            if search_context.clarification_count >= 1:
+                self.logger.info("⚠️ Ya se pidió clarificación - mostrando resultados disponibles")
+                search_context.missing_info = []  # Limpiar para forzar mostrar resultados
+            
+            # Resetear intentos de búsqueda para permitir nueva búsqueda
             search_context.search_attempts = []
             
             # Proceder directamente a búsqueda
@@ -367,7 +373,7 @@ debo consultar la base de conocimiento para darte información precisa y actuali
         else:
             # Es una nueva búsqueda
             search_context = conversation.create_search_context(message)
-            search_context.original_query = message  # Guardar query original
+            search_context.original_query = message
             conversation.update_search_state(SearchState.ANALYZING)
         
         # PASO 1: Analizar la búsqueda (solo si no es respuesta a clarificación)
@@ -572,8 +578,8 @@ debo consultar la base de conocimiento para darte información precisa y actuali
                 )
             
             # PASO 4: Manejar búsquedas muy generales
-            # Si ya clarificamos una vez, mostrar resultados aunque sean generales
-            if validation.result_quality == "too_general" and not search_context.has_clarified:
+            # Solo pedir clarificación si no hemos alcanzado el límite
+            if validation.result_quality == "too_general" and not search_context.has_clarified and search_context.clarification_count < 1:
                 # Es una búsqueda muy general - pedir clarificación específica
                 conversation.update_search_state(SearchState.NEEDS_INFO)
                 # NO marcar has_clarified aquí - se marca cuando el usuario responde
@@ -899,6 +905,12 @@ Pregunta: {message}
 
 Información disponible:
 {context}
+
+IMPORTANTE - NUNCA INVENTES PRODUCTOS:
+- NO generes listados de productos con precios, SKUs o stock
+- NO inventes especificaciones de productos específicos
+- SI el usuario busca productos, indica que debe usar la búsqueda de productos
+- SOLO proporciona información técnica general basada en el conocimiento disponible
 
 Genera una respuesta clara, concisa y técnicamente correcta.
 Si la información no es suficiente, indícalo honestamente."""
