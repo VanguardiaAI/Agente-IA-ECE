@@ -31,6 +31,16 @@ Un cliente de una tienda eléctrica dice: "{user_query}"
 
 ANALIZA qué producto busca y genera términos de búsqueda optimizados.
 
+DETECCIÓN DE REFERENCIAS SKU:
+- Los electricistas profesionales a menudo buscan por referencia/SKU
+- Ejemplos de búsquedas con SKU:
+  - "Quiero el producto con referencia 10004922"
+  - "Busco la ref 1232234234"
+  - "Necesito el SKU A58K004"
+  - "10004922" (solo el número)
+- Si detectas números largos (6+ dígitos) o códigos alfanuméricos que parecen referencias, inclúyelos en detected_sku
+- Las referencias pueden aparecer después de palabras como: referencia, ref, sku, código, modelo
+
 IMPORTANTE - Equivalencias y sinónimos del sector eléctrico (proporcionados por el cliente):
 
 PROTECCIONES ELÉCTRICAS:
@@ -85,18 +95,19 @@ Devuelve JSON con términos de búsqueda ampliados:
 {{
     "search_terms": ["término principal", "sinónimos relevantes"],
     "product_type": "tipo de producto",
-    "search_query": "consulta optimizada para búsqueda"
+    "search_query": "consulta optimizada para búsqueda",
+    "detected_sku": "referencia SKU si se detecta, o null si no hay"
 }}
 
 Ejemplos:
 - Usuario: "necesito un automático de 16A"
-- Respuesta: {{"search_terms": ["automático", "magnetotérmico", "PIA", "disyuntor", "16A"], "product_type": "protección eléctrica", "search_query": "magnetotérmico PIA 16A automático"}}
+- Respuesta: {{"search_terms": ["automático", "magnetotérmico", "PIA", "disyuntor", "16A"], "product_type": "protección eléctrica", "search_query": "magnetotérmico PIA 16A automático", "detected_sku": null}}
 
-- Usuario: "lámpara para fábrica"
-- Respuesta: {{"search_terms": ["lámpara", "campana industrial", "luminaria industrial", "proyector", "alto bay"], "product_type": "iluminación industrial", "search_query": "campana industrial luminaria proyector alto bay"}}
+- Usuario: "Quiero el producto con referencia 10004922"
+- Respuesta: {{"search_terms": ["10004922"], "product_type": "producto específico", "search_query": "10004922", "detected_sku": "10004922"}}
 
-- Usuario: "necesito cintillos"
-- Respuesta: {{"search_terms": ["cintillos", "bridas", "fleje", "abrazadera", "precinto"], "product_type": "sujeción cables", "search_query": "bridas cintillos abrazadera fleje"}}
+- Usuario: "busco la ref A58K004 que es un diferencial"
+- Respuesta: {{"search_terms": ["A58K004", "diferencial"], "product_type": "protección eléctrica", "search_query": "A58K004 diferencial", "detected_sku": "A58K004"}}
 
 REGLAS:
 - EXPANDE la búsqueda con sinónimos técnicos del sector

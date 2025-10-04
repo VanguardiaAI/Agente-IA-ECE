@@ -1263,12 +1263,14 @@ Responde SOLO con la categoría: order_inquiry, stock_check, faq_inquiry, produc
             # Generar embedding para la consulta OPTIMIZADA
             embedding = await self.embedding_service.generate_embedding(optimized_query)
             
-            # Realizar búsqueda híbrida con la consulta optimizada
-            results = await self.db_service.hybrid_search(
+            # Realizar búsqueda inteligente pasando el análisis completo
+            results = await self.db_service.intelligent_product_search(
                 query_text=optimized_query,
                 query_embedding=embedding,
                 content_types=["product"],
-                limit=20  # Buscar más para luego filtrar con IA
+                limit=20,  # Buscar más para luego filtrar con IA
+                wc_service=self.wc_service,
+                search_analysis=search_analysis  # Pasar el análisis completo que incluye detected_sku
             )
             
             # Si hay resultados, optimizarlos con IA
@@ -1856,6 +1858,12 @@ INSTRUCCIONES IMPORTANTES:
 8. NUNCA prometas avisar cuando algo esté disponible
 9. NO HAY TIENDA FÍSICA: Solo venta online
 10. Para soporte usa SOLO el WhatsApp: +34 614 21 81 22
+
+RECONOCIMIENTO DE REFERENCIAS SKU:
+- Los electricistas profesionales suelen buscar por referencia/SKU (números como "10004922" o códigos alfanuméricos)
+- Si el usuario proporciona SOLO números o códigos (sin palabras descriptivas), es muy probable que sea una referencia SKU
+- Cuando detectes una búsqueda por SKU, di algo como: "Buscando la referencia [SKU]..." y muestra resultados exactos
+- Los SKU son importantes para los profesionales porque identifican exactamente el producto que necesitan
 
 INFORMACIÓN DEL CLIENTE:
 - Nombre: {self.conversation_state.context.customer_name or 'Cliente'}

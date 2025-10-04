@@ -77,7 +77,9 @@ def register_product_tools(mcp):
                 
                 if use_hybrid:
                     # Usar búsqueda híbrida en base de conocimiento
-                    result = await _hybrid_product_search(query, limit, db_service, embedding_service)
+                    # Crear servicio WooCommerce para búsqueda híbrida
+                    wc = WooCommerceService()
+                    result = await _hybrid_product_search(query, limit, db_service, embedding_service, wc)
                     print(f"   📋 Hybrid search returned: {len(result)} chars")
                     return result
                 else:
@@ -327,7 +329,7 @@ def register_product_tools(mcp):
             return f"❌ Error buscando productos similares: {str(e)}"
 
 # Funciones auxiliares
-async def _hybrid_product_search(query: str, limit: int, db_service: HybridDatabaseService, embedding_service: EmbeddingService) -> str:
+async def _hybrid_product_search(query: str, limit: int, db_service: HybridDatabaseService, embedding_service: EmbeddingService, wc_service: WooCommerceService = None) -> str:
     """Realizar búsqueda inteligente combinando WooCommerce y búsqueda híbrida"""
     try:
         # Verificar que los servicios estén inicializados
@@ -336,35 +338,24 @@ async def _hybrid_product_search(query: str, limit: int, db_service: HybridDatab
         if not embedding_service.initialized:
             return "❌ Error: Servicio de embeddings no inicializado"
             
-        # Generar embedding para la consulta
-        embedding = await embedding_service.generate_embedding(query)
+        # Usar el optimizador de búsqueda para analizar la consulta
+        from services.search_optimizer import search_optimizer
         
-        # Determinar si es una búsqueda refinada con términos específicos
-        query_lower = query.lower()
-        has_specific_terms = any([
-            'schneider' in query_lower,
-            'legrand' in query_lower,
-            'famatel' in query_lower,
-            any(char.isdigit() for char in query_lower),  # Contiene números
-            'curva' in query_lower,
-            'polo' in query_lower
-        ])
+        search_analysis = await search_optimizer.analyze_product_query(query)
+        optimized_query = search_analysis.get('search_query', query)
         
-        # Si tiene términos específicos, usar búsqueda refinada
-        if has_specific_terms:
-            results = await db_service.refined_product_search(
-                query_text=query,
-                query_embedding=embedding,
-                limit=limit
-            )
-        else:
-            # Búsqueda híbrida normal
-            results = await db_service.hybrid_search(
-                query_text=query,
-                query_embedding=embedding,
-                content_types=["product"],
-                limit=limit
-            )
+        # Generar embedding para la consulta OPTIMIZADA
+        embedding = await embedding_service.generate_embedding(optimized_query)
+        
+        # Usar búsqueda inteligente que maneja SKUs automáticamente
+        results = await db_service.intelligent_product_search(
+            query_text=optimized_query,
+            query_embedding=embedding,
+            content_types=["product"],
+            limit=limit,
+            wc_service=wc_service,
+            search_analysis=search_analysis  # Incluye detected_sku si existe
+        )
         
         if not results:
             return f"<!-- PRODUCTS_COUNT:0 -->❌ No se encontraron productos para: '{query}'"

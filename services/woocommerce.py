@@ -53,6 +53,12 @@ class WooCommerceService:
         params = {"search": search, "per_page": per_page}
         return await self._make_request("GET", "products", params=params)
     
+    async def get_products_by_sku(self, sku: str) -> Optional[List[Dict]]:
+        """Buscar productos por SKU exacto"""
+        # WooCommerce permite búsqueda exacta por SKU usando el parámetro 'sku'
+        params = {"sku": sku, "per_page": 10}
+        return await self._make_request("GET", "products", params=params)
+    
     async def get_product_categories(self, **params) -> Optional[List[Dict]]:
         """Obtener categorías de productos"""
         return await self._make_request("GET", "products/categories", params=params)

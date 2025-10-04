@@ -97,27 +97,7 @@ class HybridDatabaseService:
                 ON knowledge_base(is_active) WHERE is_active = true;
             """)
             
-            # Función trigger para auto-actualizar tsvector
-            await conn.execute("""
-                CREATE OR REPLACE FUNCTION update_search_vector() 
-                RETURNS TRIGGER AS $$
-                BEGIN
-                    NEW.search_vector := to_tsvector('spanish', 
-                        COALESCE(NEW.title, '') || ' ' || COALESCE(NEW.content, '')
-                    );
-                    NEW.updated_at := CURRENT_TIMESTAMP;
-                    RETURN NEW;
-                END;
-                $$ LANGUAGE plpgsql;
-            """)
-            
-            # Trigger para actualizar automáticamente el vector de búsqueda
-            await conn.execute("""
-                DROP TRIGGER IF EXISTS trigger_update_search_vector ON knowledge_base;
-                CREATE TRIGGER trigger_update_search_vector
-                    BEFORE INSERT OR UPDATE ON knowledge_base
-                    FOR EACH ROW EXECUTE FUNCTION update_search_vector();
-            """)
+            # NO USAMOS TRIGGERS - Actualización manual del search_vector
             
             logger.info("✅ Esquema de base de datos creado exitosamente")
     
@@ -138,10 +118,16 @@ class HybridDatabaseService:
         embedding_str = str(embedding) if embedding else None
         
         async with self.pool.acquire() as conn:
+            # Generar search_vector manualmente
+            search_vector = await conn.fetchval(
+                "SELECT to_tsvector('spanish', $1 || ' ' || $2)",
+                title or '', content or ''
+            )
+            
             row = await conn.fetchrow("""
                 INSERT INTO knowledge_base (
-                    content_type, title, content, embedding, external_id, metadata
-                ) VALUES ($1, $2, $3, $4, $5, $6)
+                    content_type, title, content, embedding, external_id, metadata, search_vector
+                ) VALUES ($1, $2, $3, $4, $5, $6, to_tsvector('spanish', $2 || ' ' || $3))
                 RETURNING id
             """, content_type, title, content, embedding_str, external_id, 
                 json.dumps(metadata or {}))
@@ -187,6 +173,10 @@ class HybridDatabaseService:
         if not updates:
             return False
         
+        # Agregar actualización manual de search_vector y timestamp
+        updates.append(f"search_vector = to_tsvector('spanish', COALESCE(title, '') || ' ' || COALESCE(content, ''))")
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        
         values.append(knowledge_id)
         
         async with self.pool.acquire() as conn:
@@ -204,7 +194,8 @@ class HybridDatabaseService:
         query_embedding: List[float],
         content_types: List[str] = None,
         limit: int = None,
-        wc_service = None
+        wc_service = None,
+        search_analysis: Dict[str, Any] = None
     ) -> List[Dict[str, Any]]:
         """
         Búsqueda inteligente que combina WooCommerce y búsqueda híbrida
@@ -215,35 +206,48 @@ class HybridDatabaseService:
         
         limit = limit or HYBRID_SEARCH_CONFIG["final_limit"]
         
-        # Detectar tipo de búsqueda
-        query_type = self._classify_search_query(query_text)
-        
         # Verificar cache para búsquedas idénticas
-        cache_key = f"{query_text.lower().strip()}_{limit}_{query_type}"
+        cache_key = f"{query_text.lower().strip()}_{limit}"
         if cache_key in self._search_cache:
             logger.info(f"🔍 Usando resultado en cache para: '{query_text}'")
             return self._search_cache[cache_key]
         
-        logger.info(f"🔍 Búsqueda '{query_text}' clasificada como: {query_type}")
+        logger.info(f"🔍 Búsqueda inteligente para: '{query_text}'")
         
         all_results = {}
+        
+        # Si el análisis de IA detectó un SKU, buscar primero coincidencias exactas
+        detected_sku = search_analysis.get('detected_sku') if search_analysis else None
+        if detected_sku:
+            logger.info(f"🎯 IA detectó referencia SKU: {detected_sku}")
+            sku_results = await self._search_exact_sku(detected_sku)
+            if sku_results:
+                logger.info(f"✅ Encontradas {len(sku_results)} coincidencias exactas de SKU")
+                for i, result in enumerate(sku_results):
+                    # Puntuación máxima para coincidencias exactas de SKU
+                    result['rrf_score'] = 1000.0 - i  # 1000, 999, 998...
+                    result['source'] = 'sku_exact'
+                    result['match_type'] = 'sku_exact'
+                    external_id = result.get('external_id')
+                    if external_id and external_id not in all_results:
+                        all_results[external_id] = result
         
         # PASO 1: Búsqueda en WooCommerce (siempre, para asegurar productos exactos)
         if wc_service:
             wc_results = await self._search_woocommerce_products(
-                wc_service, query_text, query_type
+                wc_service, query_text, detected_sku
             )
             
-            # Agregar resultados de WooCommerce con boost alto para búsquedas exactas
+            # Agregar resultados de WooCommerce con boost alto si hay SKU detectado
             boost_factor = (HYBRID_SEARCH_CONFIG["exact_match_weight"] 
-                          if query_type in ['exact', 'technical'] 
+                          if detected_sku
                           else HYBRID_SEARCH_CONFIG["semantic_match_weight"])
             
             for i, result in enumerate(wc_results):
                 # Score alto para WooCommerce, decreciente por posición
                 result['rrf_score'] = 100.0 * boost_factor * (1 - i * 0.1)
                 result['source'] = 'woocommerce'
-                result['match_type'] = query_type
+                result['match_type'] = 'woocommerce_search'
                 
                 # Usar external_id como clave para evitar duplicados
                 external_id = result.get('external_id')
@@ -815,7 +819,7 @@ class HybridDatabaseService:
                 UPDATE knowledge_base 
                 SET title = $2, content = $3, embedding = $4, metadata = $5, 
                     updated_at = CURRENT_TIMESTAMP, is_active = true,
-                    search_vector = to_tsvector('spanish', $3)
+                    search_vector = to_tsvector('spanish', $2 || ' ' || $3)
                 WHERE external_id = $1
                 RETURNING id;
                 """
@@ -832,7 +836,7 @@ class HybridDatabaseService:
             insert_query = """
             INSERT INTO knowledge_base 
             (content_type, title, content, embedding, external_id, metadata, search_vector)
-            VALUES ($1, $2, $3, $4, $5, $6, to_tsvector('spanish', $3))
+            VALUES ($1, $2, $3, $4, $5, $6, to_tsvector('spanish', $2 || ' ' || $3))
             RETURNING id;
             """
             
@@ -1261,45 +1265,52 @@ class HybridDatabaseService:
         
         return unique_terms
     
-    def _classify_search_query(self, query_text: str) -> str:
-        """Clasificar el tipo de consulta para optimizar la búsqueda"""
-        query_lower = query_text.lower().strip()
-        
-        # Detectar búsquedas exactas/técnicas
-        if any(pattern in query_lower for pattern in [
-            'c10', 'c16', 'c20', 'c25', 'c32', 'c40', 'c50', 'c63',  # Curvas
-            'dpn', 'pia', 'magnetotermico', 'diferencial',  # Automáticos
-            'led', 'ip65', 'ip44', 'ip20',  # Códigos técnicos
-            '220v', '12v', '24v', '230v',  # Voltajes
-            '10a', '16a', '20a', '25a', '32a',  # Amperajes
-            '30ma', '300ma',  # Sensibilidades
-            '1.5mm', '2.5mm', '4mm', '6mm'  # Secciones
-        ]):
-            return 'technical'
-        
-        # Detectar búsquedas de códigos/modelos específicos
-        import re
-        if re.search(r'\b[A-Z]{2,}[0-9]*\b|\b\d+[WAV]?\b|\b[A-Z0-9]+-[A-Z0-9]+\b', query_text):
-            return 'exact'
-        
-        # Detectar búsquedas semánticas (preguntas o descripciones)
-        semantic_indicators = [
-            'necesito', 'busco', 'quiero', 'para', 'como', 'que', 'donde',
-            'cuanto', 'cual', 'ayuda', 'recomienda', 'mejor', 'sirve'
-        ]
-        if any(word in query_lower for word in semantic_indicators):
-            return 'semantic'
-        
-        # Por defecto, búsqueda mixta
-        return 'mixed'
     
-    async def _search_woocommerce_products(self, wc_service, query_text: str, query_type: str) -> List[Dict[str, Any]]:
+    async def _search_exact_sku(self, sku: str) -> List[Dict[str, Any]]:
+        """Buscar productos por coincidencia exacta de SKU en la base de datos"""
+        try:
+            async with self.pool.acquire() as conn:
+                # Búsqueda exacta por SKU en el campo metadata
+                query = """
+                SELECT id, title, content, content_type, metadata, external_id
+                FROM knowledge_base 
+                WHERE is_active = true 
+                AND content_type = 'product'
+                AND (metadata->>'sku' = $1 OR UPPER(metadata->>'sku') = UPPER($1))
+                LIMIT 5
+                """
+                
+                rows = await conn.fetch(query, sku)
+                
+                results = []
+                for row in rows:
+                    result = dict(row)
+                    if result['metadata']:
+                        result['metadata'] = json.loads(result['metadata']) if isinstance(result['metadata'], str) else result['metadata']
+                    results.append(result)
+                
+                return results
+                
+        except Exception as e:
+            logger.error(f"Error buscando SKU exacto: {e}")
+            return []
+    
+    async def _search_woocommerce_products(self, wc_service, query_text: str, detected_sku: str = None) -> List[Dict[str, Any]]:
         """Buscar productos en WooCommerce y convertir al formato estándar"""
         try:
             wc_limit = HYBRID_SEARCH_CONFIG["wc_results_limit"]
             
-            # Usar WooCommerce search API
-            wc_products = await wc_service.search_products(query_text, per_page=wc_limit)
+            # Si la IA detectó un SKU, usar búsqueda específica por SKU
+            if detected_sku:
+                logger.info(f"🎯 Buscando por SKU en WooCommerce: {detected_sku}")
+                # Primero intentar búsqueda exacta por SKU
+                wc_products = await wc_service.get_products_by_sku(detected_sku)
+                if not wc_products:
+                    # Si no hay coincidencia exacta, intentar búsqueda general
+                    wc_products = await wc_service.search_products(query_text, per_page=wc_limit)
+            else:
+                # Usar WooCommerce search API normal
+                wc_products = await wc_service.search_products(query_text, per_page=wc_limit)
             
             if not wc_products:
                 return []
